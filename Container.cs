@@ -37,7 +37,6 @@ class Container
         return (T)services[type];
     }
 
-
     public void construct()
     {
         Stack<Type> stack = new(constructors.Count);

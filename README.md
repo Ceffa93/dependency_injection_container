@@ -1,2 +1,2 @@
 # dependency_injection_container
-Dependency injection container library in C#.
+C# Dependency Injection Container library
