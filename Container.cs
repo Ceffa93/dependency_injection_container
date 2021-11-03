@@ -34,15 +34,15 @@ class Container
             services.ContainsKey(type),
             "Service <" + type + "> not found!");
 
-        return (T)services[type];
+        return (T) services[type];
     }
 
     public void construct()
     {
         Stack<Type> stack = new(constructors.Count);
 
-        foreach (var root in findRootNodes())
-            stack.Push(root);
+        foreach (var type in findRootTypes())
+            stack.Push(type);
 
         while (stack.Count > 0)
             if(!tryAddChildrenToStack(stack, stack.Peek()))
@@ -51,23 +51,23 @@ class Container
         constructors.Clear();
     }
 
-    private HashSet<Type> findRootNodes()
+    private HashSet<Type> findRootTypes()
     {
-        HashSet<Type> rootNodes = new (constructors.Keys);
+        HashSet<Type> rootTypes = new (constructors.Keys);
 
-        foreach (var parentInfo in constructors)
-            foreach (var paramInfo in parentInfo.Value.GetParameters())
-                rootNodes.Remove(paramInfo.ParameterType);
+        foreach (var constrInfo in constructors.Values)
+            foreach (var paramInfo in constrInfo.GetParameters())
+                rootTypes.Remove(paramInfo.ParameterType);
 
-        return rootNodes;
+        return rootTypes;
     }
 
-    private bool tryAddChildrenToStack(Stack<Type> stack, Type parentType)
+    private bool tryAddChildrenToStack(Stack<Type> stack, Type type)
     {
         bool bAddedDependencies = false;
 
-        foreach (var childInfo in constructors[parentType].GetParameters())
-            bAddedDependencies |= tryAddToStack(stack, childInfo.ParameterType, parentType);
+        foreach (var childInfo in constructors[type].GetParameters())
+            bAddedDependencies |= tryAddToStack(stack, childInfo.ParameterType, type);
 
         return bAddedDependencies;
     }
@@ -90,8 +90,8 @@ class Container
         var parameters = constructors[type].GetParameters();
         var arguments = new List<object>(parameters.Length);
 
-        foreach (var childInfo in parameters)
-            arguments.Add(services[childInfo.ParameterType]);
+        foreach (var paramInfo in parameters)
+            arguments.Add(services[paramInfo.ParameterType]);
 
         services[type] = constructors[type].Invoke(arguments.ToArray());
     }
