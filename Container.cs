@@ -12,58 +12,12 @@ class Container
     {
         Type type = typeof(T);
         var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-        Debug.Assert(constrList.Length == 1, "A service must have a single constructor!");
-        var constr = constrList.First();
-        constructors[type] = constr;
-    }
 
-    public void construct()
-    {
-        int count = constructors.Count;
-        HashSet<Type> visited = new();
-        Stack<Type> stack = new();
-        List<Type> sorted = new();
+        Debug.Assert(
+            constrList.Length == 1, 
+            "Services must have a single constructor!");
 
-
-
-        foreach (var root in getRootNodes())
-        {
-            stack.Push(root);
-        }
-
-        while(stack.Count > 0)
-        {
-            var node = stack.Peek();
-            bool canCreate = true;
-            foreach (var child in constructors[node].GetParameters())
-            {
-                if (!visited.Contains(child.ParameterType))
-                {
-                    canCreate = false;
-                    stack.Push(child.ParameterType);
-                }
-            }
-            if(canCreate)
-            {
-                visited.Add(node);
-                sorted.Add(node);
-                stack.Pop();
-            }
-        }
-
-        services = new();
-
-        foreach (var node in sorted)
-        {
-            List<object> args = new();
-            foreach (var child in constructors[node].GetParameters())
-            {
-                Debug.Assert(services.ContainsKey(child.ParameterType));
-                args.Add(services[child.ParameterType]);
-            }
-            services[node] = constructors[node].Invoke(args.ToArray());
-            Console.WriteLine(node);
-        }
+        constructors[type] = constrList.First();
     }
 
     public T get<T>()
@@ -71,13 +25,63 @@ class Container
         return (T)services[typeof(T)];
     }
 
-    private HashSet<Type> getRootNodes()
+
+    public void construct()
     {
-        var rootNodes = new HashSet<Type>(constructors.Keys);
-        foreach (var constr in constructors.Values)
-            foreach (var param in constr.GetParameters())
-                rootNodes.Remove(param.ParameterType);
+        services = new(constructors.Count);
+
+        Stack<Type> stack = new(constructors.Count);
+
+        foreach (var root in findRootNodes())
+            stack.Push(root);
+
+        while (stack.Count > 0)
+            if(!tryAddChildrenToStack(stack, stack.Peek()))
+                createService(stack.Pop());
+
+        constructors.Clear();
+    }
+
+    private HashSet<Type> findRootNodes()
+    {
+        HashSet<Type> rootNodes = new (constructors.Keys);
+        foreach (var parentInfo in constructors)
+            foreach (var paramInfo in parentInfo.Value.GetParameters())
+                rootNodes.Remove(paramInfo.ParameterType);
         return rootNodes;
+    }
+
+    private bool tryAddChildrenToStack(Stack<Type> stack, Type parentType)
+    {
+        bool bAddedDependencies = false;
+        foreach (var childInfo in constructors[parentType].GetParameters())
+            bAddedDependencies |= tryAddToStack(stack, childInfo.ParameterType, parentType);
+        return bAddedDependencies;
+    }
+
+    private bool tryAddToStack(Stack<Type> stack, Type type, Type parentType)
+    {
+        Debug.Assert(
+            constructors.ContainsKey(type),
+            "Dependency <" + type + "> required by <" + parentType + "> is missing!");
+
+        if (services.ContainsKey(type))
+            return false;
+
+        stack.Push(type);
+        return true;
+    }
+
+    private void createService(Type type)
+    {
+        var parameters = constructors[type].GetParameters();
+        var arguments = new List<object>(parameters.Length);
+
+        foreach (var childInfo in parameters)
+            arguments.Add(services[childInfo.ParameterType]);
+
+        services[type] = constructors[type].Invoke(arguments.ToArray());
+        Console.WriteLine(type);
     }
 
     Dictionary<Type, ConstructorInfo> constructors;
