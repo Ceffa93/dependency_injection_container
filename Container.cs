@@ -1,4 +1,7 @@
-﻿class A
+﻿using System.Reflection;
+using System.Diagnostics;
+
+class A
 {
     public override string ToString()
     {
@@ -12,18 +15,31 @@ class Container
 {
     public Container()
     {
-        services = new List<object>();
+        constructors = new();
     }
 
     public void add<T>() where T : new()
     {
-        services.Add(new T());
+        Type type = typeof(T);
+        var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
+        Debug.Assert(constrList.Length == 1, "A service must have a single constructor!");
+        var constr = constrList.First();
+        constructors[type] = constr;
+    }
+
+    public void construct()
+    {
+        services = new();
+        Type type = typeof(A);
+        services[type] = constructors[typeof(A)].Invoke(null);
+        constructors.Clear();
     }
 
     public T get<T>()
     {
-        return (T) services.First();
+        return (T)services[typeof(T)];
     }
 
-    List<Object> services;
+    Dictionary<Type, ConstructorInfo> constructors;
+    Dictionary<Type, object> services;
 }
