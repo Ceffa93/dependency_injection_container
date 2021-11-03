@@ -1,8 +1,5 @@
-﻿Container container = new Container();
-
-// External dependencies
-container.add(new Q());
-container.add(new K());
+﻿// Create dependency injection container
+Container container = new Container();
 
 // Request services
 container.add<A>();
@@ -22,4 +19,13 @@ container.add<O>();
 container.add<P>();
 container.add<R>();
 
+// Add external dependencies
+container.add(new Q());
+container.add(new K());
+
+// Create services
 container.construct();
+
+// Get services
+A a = container.get<A>();
+Q q = container.get<Q>();

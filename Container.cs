@@ -9,7 +9,7 @@ class Container
         services = new();
     }
 
-    public void add<T>(T externalDependency)
+    public void add<T>(T externalDependency) where T : notnull
     {
         services[typeof(T)] = externalDependency;
     }
@@ -28,13 +28,18 @@ class Container
 
     public T get<T>()
     {
-        return (T)services[typeof(T)];
+        var type = typeof(T);
+
+        Debug.Assert(
+            services.ContainsKey(type),
+            "Service <" + type + "> not found!");
+
+        return (T)services[type];
     }
 
 
     public void construct()
     {
-
         Stack<Type> stack = new(constructors.Count);
 
         foreach (var root in findRootNodes())
@@ -50,17 +55,21 @@ class Container
     private HashSet<Type> findRootNodes()
     {
         HashSet<Type> rootNodes = new (constructors.Keys);
+
         foreach (var parentInfo in constructors)
             foreach (var paramInfo in parentInfo.Value.GetParameters())
                 rootNodes.Remove(paramInfo.ParameterType);
+
         return rootNodes;
     }
 
     private bool tryAddChildrenToStack(Stack<Type> stack, Type parentType)
     {
         bool bAddedDependencies = false;
+
         foreach (var childInfo in constructors[parentType].GetParameters())
             bAddedDependencies |= tryAddToStack(stack, childInfo.ParameterType, parentType);
+
         return bAddedDependencies;
     }
 

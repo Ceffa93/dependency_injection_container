@@ -1,4 +1,6 @@
-﻿class A { public A() { } }
+﻿// List of classes depending on each other to test the dependency injection container
+
+class A { public A() { } }
 class B { public B(E e, K k) { } }
 class C { public C(G g, H h) { } }
 class D { public D() { } }
