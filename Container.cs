@@ -6,6 +6,12 @@ class Container
     public Container()
     {
         constructors = new();
+        services = new();
+    }
+
+    public void add<T>(T externalDependency)
+    {
+        services[typeof(T)] = externalDependency;
     }
 
     public void add<T>()
@@ -28,7 +34,6 @@ class Container
 
     public void construct()
     {
-        services = new(constructors.Count);
 
         Stack<Type> stack = new(constructors.Count);
 
@@ -61,12 +66,12 @@ class Container
 
     private bool tryAddToStack(Stack<Type> stack, Type type, Type parentType)
     {
+       if (services.ContainsKey(type))
+            return false;
+
         Debug.Assert(
             constructors.ContainsKey(type),
             "Dependency <" + type + "> required by <" + parentType + "> is missing!");
-
-        if (services.ContainsKey(type))
-            return false;
 
         stack.Push(type);
         return true;
@@ -81,7 +86,6 @@ class Container
             arguments.Add(services[childInfo.ParameterType]);
 
         services[type] = constructors[type].Invoke(arguments.ToArray());
-        Console.WriteLine(type);
     }
 
     Dictionary<Type, ConstructorInfo> constructors;
