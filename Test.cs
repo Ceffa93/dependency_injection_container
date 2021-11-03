@@ -1,7 +1,18 @@
-﻿class D { }
-class C0 { public C0(D d) { } }
-class C1 { }
-class B0 { public B0(C1 c1, D d) { } }
-class B1 { public B1(C0 c0) { } }
-class A0 { public A0(B1 b1, C1 c1) { } }
-class A1 { public A1(B0 b0) { } }
+﻿class A { public A() { } }
+class B { public B(E e, K k) { } }
+class C { public C(G g, H h) { } }
+class D { public D() { } }
+class E { public E(K k) { } }
+class F { public F(I i) { } }
+class G { public G(J j, L l) { } }
+class H { public H(L l, O o) { } }
+class I { public I(N n) { } }
+class J { public J(M m) { } }
+class K { public K() { } }
+class L { public L(M m) { } }
+class M { public M() { } }
+class N { public N(P p) { } }
+class O { public O(P p) { } }
+class P { public P(Q q) { } }
+class Q{ public Q() { } }
+class R { public R() { } }

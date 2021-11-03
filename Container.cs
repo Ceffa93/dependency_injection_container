@@ -19,12 +19,50 @@ class Container
 
     public void construct()
     {
-        var rootNodes = getRootNodes();
+        int count = constructors.Count;
+        HashSet<Type> visited = new();
+        Stack<Type> stack = new();
+        List<Type> sorted = new();
+
+
+
+        foreach (var root in getRootNodes())
+        {
+            stack.Push(root);
+        }
+
+        while(stack.Count > 0)
+        {
+            var node = stack.Peek();
+            bool canCreate = true;
+            foreach (var child in constructors[node].GetParameters())
+            {
+                if (!visited.Contains(child.ParameterType))
+                {
+                    canCreate = false;
+                    stack.Push(child.ParameterType);
+                }
+            }
+            if(canCreate)
+            {
+                visited.Add(node);
+                sorted.Add(node);
+                stack.Pop();
+            }
+        }
+
         services = new();
 
-        foreach (var root in rootNodes)
+        foreach (var node in sorted)
         {
-            buildGraph(root);
+            List<object> args = new();
+            foreach (var child in constructors[node].GetParameters())
+            {
+                Debug.Assert(services.ContainsKey(child.ParameterType));
+                args.Add(services[child.ParameterType]);
+            }
+            services[node] = constructors[node].Invoke(args.ToArray());
+            Console.WriteLine(node);
         }
     }
 
@@ -40,22 +78,6 @@ class Container
             foreach (var param in constr.GetParameters())
                 rootNodes.Remove(param.ParameterType);
         return rootNodes;
-    }
-
-    private void buildGraph(Type node)
-    {
-        List<object> args = new List<object>();
-        var constr = constructors[node];
-
-        foreach (var child in constr.GetParameters())
-        {
-            var paramType = child.ParameterType;
-            if (!services.ContainsKey(paramType)) 
-                buildGraph(paramType);
-            args.Add(services[paramType]);
-        }
-        services[node] = constr.Invoke(args.ToArray());
-        Console.WriteLine("Build " + node.FullName);
     }
 
     Dictionary<Type, ConstructorInfo> constructors;
