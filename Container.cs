@@ -1,16 +1,6 @@
 ﻿using System.Reflection;
 using System.Diagnostics;
 
-class A
-{
-    public override string ToString()
-    {
-        return "A";
-    }
-}
-
-
-
 class Container
 {
     public Container()
@@ -18,7 +8,7 @@ class Container
         constructors = new();
     }
 
-    public void add<T>() where T : new()
+    public void add<T>()
     {
         Type type = typeof(T);
         var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
@@ -29,15 +19,43 @@ class Container
 
     public void construct()
     {
+        var rootNodes = getRootNodes();
         services = new();
-        Type type = typeof(A);
-        services[type] = constructors[typeof(A)].Invoke(null);
-        constructors.Clear();
+
+        foreach (var root in rootNodes)
+        {
+            buildGraph(root);
+        }
     }
 
     public T get<T>()
     {
         return (T)services[typeof(T)];
+    }
+
+    private HashSet<Type> getRootNodes()
+    {
+        var rootNodes = new HashSet<Type>(constructors.Keys);
+        foreach (var constr in constructors.Values)
+            foreach (var param in constr.GetParameters())
+                rootNodes.Remove(param.ParameterType);
+        return rootNodes;
+    }
+
+    private void buildGraph(Type node)
+    {
+        List<object> args = new List<object>();
+        var constr = constructors[node];
+
+        foreach (var child in constr.GetParameters())
+        {
+            var paramType = child.ParameterType;
+            if (!services.ContainsKey(paramType)) 
+                buildGraph(paramType);
+            args.Add(services[paramType]);
+        }
+        services[node] = constr.Invoke(args.ToArray());
+        Console.WriteLine("Build " + node.FullName);
     }
 
     Dictionary<Type, ConstructorInfo> constructors;
