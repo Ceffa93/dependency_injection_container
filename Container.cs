@@ -11,7 +11,13 @@ class Container
 
     public void Add<T>(T externalDependency) where T : notnull
     {
-        services[typeof(T)] = externalDependency;
+        Type type = typeof(T);
+
+        Debug.Assert(
+            externalDependency is not null,
+            "External dependency <" + type + "> is null!");
+
+        services[type] = externalDependency;
     }
 
     public void Add<T>()
@@ -55,9 +61,9 @@ class Container
     {
         HashSet<Type> rootTypes = new (constructors.Keys);
 
-        foreach (var constrInfo in constructors.Values)
-            foreach (var paramInfo in constrInfo.GetParameters())
-                rootTypes.Remove(paramInfo.ParameterType);
+        foreach (var constr in constructors.Values)
+            foreach (var param in constr.GetParameters())
+                rootTypes.Remove(param.ParameterType);
 
         return rootTypes;
     }
@@ -66,8 +72,8 @@ class Container
     {
         bool bAddedDependencies = false;
 
-        foreach (var childInfo in constructors[type].GetParameters())
-            bAddedDependencies |= TryAddToStack(stack, childInfo.ParameterType, type);
+        foreach (var child in constructors[type].GetParameters())
+            bAddedDependencies |= TryAddToStack(stack, child.ParameterType, type);
 
         return bAddedDependencies;
     }
@@ -90,8 +96,8 @@ class Container
         var parameters = constructors[type].GetParameters();
         var arguments = new List<object>(parameters.Length);
 
-        foreach (var paramInfo in parameters)
-            arguments.Add(services[paramInfo.ParameterType]);
+        foreach (var param in parameters)
+            arguments.Add(services[param.ParameterType]);
 
         services[type] = constructors[type].Invoke(arguments.ToArray());
     }
