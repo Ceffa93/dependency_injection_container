@@ -29,3 +29,5 @@ container.Construct();
 // Get services
 A a = container.Get<A>();
 Q q = container.Get<Q>();
+
+container.Dispose();

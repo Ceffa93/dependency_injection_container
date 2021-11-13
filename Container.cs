@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using System.Diagnostics;
 
-class Container
+class Container : IDisposable
 {
     public Container()
     {
@@ -46,6 +46,7 @@ class Container
     public void Construct()
     {
         Stack<Type> stack = new(constructors.Count);
+        ownedServicesInitOrder = new();
 
         foreach (var type in FindRootTypes())
             stack.Push(type);
@@ -93,8 +94,10 @@ class Container
 
     private void CreateService(Type type)
     {
+        ownedServicesInitOrder.Add(type);
+
         var parameters = constructors[type].GetParameters();
-        var arguments = new List<object>(parameters.Length);
+        var arguments = new List<Object>(parameters.Length);
 
         foreach (var param in parameters)
             arguments.Add(services[param.ParameterType]);
@@ -103,5 +106,35 @@ class Container
     }
 
     private Dictionary<Type, ConstructorInfo> constructors;
-    private Dictionary<Type, object> services;
+    private List<Type> ownedServicesInitOrder;
+    private Dictionary<Type, Object> services;
+
+    #region Dispose
+
+    public void Dispose() => Dispose(true);
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!bIsDisposed)
+            if (disposing)
+                DisposeOwnedServices();
+
+        bIsDisposed = true;
+    }
+
+    private void DisposeOwnedServices()
+    {
+        foreach (var type in ownedServicesInitOrder.AsEnumerable().Reverse())
+            TryDispose(services[type]);
+    }
+
+    private void TryDispose(Object obj)
+    {
+        if (obj is IDisposable)
+            ((IDisposable)obj).Dispose();
+    }
+    
+    private bool bIsDisposed;
+
+    #endregion
 }
