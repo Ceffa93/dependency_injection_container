@@ -71,12 +71,12 @@ class Container : IDisposable
 
     private bool TryAddChildrenToStack(Stack<Type> stack, Type type)
     {
-        bool bAddedDependencies = false;
+        bool bAddedChildren = false;
 
         foreach (var child in constructors[type].GetParameters())
-            bAddedDependencies |= TryAddToStack(stack, child.ParameterType, type);
+            bAddedChildren |= TryAddToStack(stack, child.ParameterType, type);
 
-        return bAddedDependencies;
+        return bAddedChildren;
     }
 
     private bool TryAddToStack(Stack<Type> stack, Type type, Type parentType)
