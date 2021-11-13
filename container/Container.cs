@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using System.Diagnostics;
 
-class Container : IDisposable
+public class Container : IDisposable
 {
     public Container()
     {
@@ -13,9 +13,8 @@ class Container : IDisposable
     {
         Type type = typeof(T);
 
-        Debug.Assert(
-            externalDependency is not null,
-            "External dependency <" + type + "> is null!");
+        if (externalDependency is null)
+            throw new ContainerException("External dependency <" + type + "> is null!");
 
         services[type] = externalDependency;
     }
@@ -23,11 +22,14 @@ class Container : IDisposable
     public void Add<T>()
     {
         Type type = typeof(T);
+
         var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
 
-        Debug.Assert(
-            constrList.Length == 1, 
-            "Services must have a single constructor!");
+        if (constrList.Length == 0)
+            throw new ContainerException("Class <" + type + "> must specify a public constructor!");
+
+        if (constrList.Length > 1)
+            throw new ContainerException("Class <" + type + "> must specify a single public constructor!");
 
         constructors[type] = constrList.First();
     }
@@ -36,9 +38,8 @@ class Container : IDisposable
     {
         var type = typeof(T);
 
-        Debug.Assert(
-            services.ContainsKey(type),
-            "Service <" + type + "> not found!");
+        if (!services.ContainsKey(type))
+            throw new ContainerException("Service <" + type + "> not found!");
 
         return (T) services[type];
     }
@@ -84,9 +85,8 @@ class Container : IDisposable
        if (services.ContainsKey(type))
             return false;
 
-        Debug.Assert(
-            constructors.ContainsKey(type),
-            "Dependency <" + type + "> required by <" + parentType + "> is missing!");
+        if (!constructors.ContainsKey(type))
+            throw new ContainerException("Dependency <" + type + "> required by <" + parentType + "> is missing!");
 
         stack.Push(type);
         return true;
@@ -138,3 +138,9 @@ class Container : IDisposable
 
     #endregion
 }
+
+public class ContainerException : Exception
+{
+    public ContainerException(string? message) : base(message) { }
+};
+
