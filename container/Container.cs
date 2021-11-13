@@ -1,16 +1,21 @@
 ﻿using System.Reflection;
-using System.Diagnostics;
 
 public class Container : IDisposable
 {
+    #region public
+
     public Container()
     {
         constructors = new();
         services = new();
+        ownedServicesInitOrder = new();
     }
 
-    public void Add<T>(T externalDependency) where T : notnull
+    public void Add<T>(T externalDependency) 
+        where T : class
     {
+        throwIfDisposed();
+
         Type type = typeof(T);
 
         if (externalDependency is null)
@@ -20,13 +25,13 @@ public class Container : IDisposable
     }
 
     public void Add<T>()
+        where T : class
     {
+        throwIfDisposed();
+
         Type type = typeof(T);
 
         var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-
-        if (constrList.Length == 0)
-            throw new ContainerException("Class <" + type + "> must specify a public constructor!");
 
         if (constrList.Length > 1)
             throw new ContainerException("Class <" + type + "> must specify a single public constructor!");
@@ -35,7 +40,10 @@ public class Container : IDisposable
     }
 
     public T Get<T>()
+        where T : class
     {
+        throwIfDisposed();
+
         var type = typeof(T);
 
         if (!services.ContainsKey(type))
@@ -46,8 +54,9 @@ public class Container : IDisposable
 
     public void Construct()
     {
+        throwIfDisposed();
+
         Stack<Type> stack = new(constructors.Count);
-        ownedServicesInitOrder = new();
 
         foreach (var type in FindRootTypes())
             stack.Push(type);
@@ -58,7 +67,9 @@ public class Container : IDisposable
 
         constructors.Clear();
     }
+    #endregion
 
+    #region private
     private HashSet<Type> FindRootTypes()
     {
         HashSet<Type> rootTypes = new (constructors.Keys);
@@ -108,32 +119,30 @@ public class Container : IDisposable
     private Dictionary<Type, ConstructorInfo> constructors;
     private List<Type> ownedServicesInitOrder;
     private Dictionary<Type, Object> services;
+    #endregion
 
-    #region Dispose
+    #region dispose
 
-    public void Dispose() => Dispose(true);
-
-    protected virtual void Dispose(bool disposing)
+    public void Dispose()
     {
         if (!bIsDisposed)
-            if (disposing)
-                DisposeOwnedServices();
+            foreach (var type in ownedServicesInitOrder.AsEnumerable().Reverse())
+                TryDispose(services[type]);
 
         bIsDisposed = true;
     }
-
-    private void DisposeOwnedServices()
-    {
-        foreach (var type in ownedServicesInitOrder.AsEnumerable().Reverse())
-            TryDispose(services[type]);
-    }
-
     private void TryDispose(Object obj)
     {
         if (obj is IDisposable)
             ((IDisposable)obj).Dispose();
     }
-    
+
+    private void throwIfDisposed()
+    {
+        if(bIsDisposed)
+            throw new ObjectDisposedException("Container has been disposed!");
+    }
+
     private bool bIsDisposed;
 
     #endregion

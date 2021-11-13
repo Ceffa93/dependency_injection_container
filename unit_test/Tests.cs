@@ -6,26 +6,22 @@ namespace unit_test
     [TestClass]
     public class Tests
     {
-        #region test_classes
-        struct A0 { public A0() { } };
-        struct A1 { public A1() { } };
-        struct A2 { public A2() { } };
-        struct B0 { public B0(A0 x) { } };
-        struct B1 { public B1(A1 x) { } };
-        struct B2 { public B2(A0 x, A1 y) { } };
-        struct C0 { public C0(A0 x, B0 y) { } };
-        struct C1 { public C1(B2 x) { } };
-        #endregion
+        class A0 { public A0() { } };
+        class A1 { public A1() { } };
+        class A2 { public A2() { } };
+        class B0 { public B0(A0 x) { } };
+        class B1 { public B1(A1 x) { } };
+        class B2 { public B2(A0 x, A1 y) { } };
+        class C0 { public C0(A0 x, B0 y) { } };
+        class C1 { public C1(B2 x) { } };
 
         [TestMethod]
         public void TestMultipleRoots()
         {
-            A0 a = new();
             Container container = new();
             container.Add<A0>();
             container.Add<A1>();
             container.Construct();
-            container.Dispose();
         }
 
         [TestMethod]
@@ -36,7 +32,28 @@ namespace unit_test
             container.Add<B0>();
             container.Add<A0>();
             container.Construct();
-            container.Dispose();
+        }
+
+        [TestMethod]
+        public void TestExternalDependency()
+        {
+            Container container = new();
+            container.Add(new A0());
+            container.Add<B0>();
+            container.Construct();
+        }
+
+        [TestMethod]
+        public void TestNullExternalDependency()
+        {
+            Container container = new();
+            A0? a0 = null;
+            try
+            {
+                container.Add(a0);
+                Assert.Fail();
+            }
+            catch (ContainerException) { }
         }
 
         [TestMethod]
@@ -47,10 +64,65 @@ namespace unit_test
             try 
             {
                 container.Construct();
-                container.Dispose();
                 Assert.Fail();
             }
             catch (ContainerException) {}
+        }
+
+        [TestMethod]
+        public void TestGetService()
+        {
+            Container container = new();
+            container.Add<A0>();
+            container.Add(new A1());
+            container.Construct();
+            container.Get<A0>();
+            container.Get<A1>();
+        }
+
+        [TestMethod]
+        public void TestFailedGet()
+        {
+            Container container = new();
+            container.Construct();
+            try
+            {
+                container.Get<A0>();
+                Assert.Fail();
+            }
+            catch (ContainerException) { }
+        }
+
+        [TestMethod]
+        public void TestDisposeException()
+        {
+            Container container = new();
+            container.Dispose();
+            try
+            {
+                container.Construct();
+                Assert.Fail();
+            }
+            catch (ObjectDisposedException) { }
+        }
+
+
+        class TwoConstructor
+        {
+            public TwoConstructor() { }
+            public TwoConstructor(A0 a) { }
+        };
+
+        [TestMethod]
+        public void TestTwoConstructor()
+        {
+            Container container = new();
+            try
+            {
+                container.Add<TwoConstructor>();
+                Assert.Fail();
+            }
+            catch (ContainerException) { }
         }
     }
 }
