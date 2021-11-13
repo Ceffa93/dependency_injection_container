@@ -4,7 +4,7 @@ using System;
 namespace unit_test
 {
     [TestClass]
-    public class Tests
+    public class BaseTests
     {
         class A0 { public A0() { } };
         class A1 { public A1() { } };
@@ -21,7 +21,7 @@ namespace unit_test
             ServiceList list = new();
             list.Add<A0>();
             list.Add<A1>();
-            Container container = new(list);
+            new Container(list);
         }
 
         [TestMethod]
@@ -31,7 +31,7 @@ namespace unit_test
             list.Add<C0>();
             list.Add<B0>();
             list.Add<A0>();
-            Container container = new(list);
+            new Container(list);
         }
 
         [TestMethod]
@@ -40,7 +40,7 @@ namespace unit_test
             ServiceList list = new();
             list.Add(new A0());
             list.Add<B0>();
-            Container container = new(list);
+            new Container(list);
         }
 
         [TestMethod]
@@ -63,7 +63,7 @@ namespace unit_test
             list.Add<C0>();
             try 
             {
-                Container container = new(list);
+                new Container(list);
                 Assert.Fail();
             }
             catch (ContainerException) {}
