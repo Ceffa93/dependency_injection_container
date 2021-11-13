@@ -18,39 +18,39 @@ namespace unit_test
         [TestMethod]
         public void TestMultipleRoots()
         {
-            Container container = new();
-            container.Add<A0>();
-            container.Add<A1>();
-            container.Construct();
+            ServiceList list = new();
+            list.Add<A0>();
+            list.Add<A1>();
+            Container container = new(list);
         }
 
         [TestMethod]
         public void TestDiamondInclusion()
         {
-            Container container = new();
-            container.Add<C0>();
-            container.Add<B0>();
-            container.Add<A0>();
-            container.Construct();
+            ServiceList list = new();
+            list.Add<C0>();
+            list.Add<B0>();
+            list.Add<A0>();
+            Container container = new(list);
         }
 
         [TestMethod]
         public void TestExternalDependency()
         {
-            Container container = new();
-            container.Add(new A0());
-            container.Add<B0>();
-            container.Construct();
+            ServiceList list = new();
+            list.Add(new A0());
+            list.Add<B0>();
+            Container container = new(list);
         }
 
         [TestMethod]
         public void TestNullExternalDependency()
         {
-            Container container = new();
+            ServiceList list = new();
             A0? a0 = null;
             try
             {
-                container.Add(a0);
+                list.Add(a0);
                 Assert.Fail();
             }
             catch (ContainerException) { }
@@ -59,11 +59,11 @@ namespace unit_test
         [TestMethod]
         public void TestMissingDependency()
         {
-            Container container = new();
-            container.Add<C0>();
+            ServiceList list = new();
+            list.Add<C0>();
             try 
             {
-                container.Construct();
+                Container container = new(list);
                 Assert.Fail();
             }
             catch (ContainerException) {}
@@ -72,10 +72,11 @@ namespace unit_test
         [TestMethod]
         public void TestGetService()
         {
-            Container container = new();
-            container.Add<A0>();
-            container.Add(new A1());
-            container.Construct();
+            ServiceList list = new();
+            list.Add<A0>();
+            list.Add(new A1());
+
+            Container container = new(list);
             container.Get<A0>();
             container.Get<A1>();
         }
@@ -83,8 +84,8 @@ namespace unit_test
         [TestMethod]
         public void TestFailedGet()
         {
-            Container container = new();
-            container.Construct();
+            ServiceList list = new();
+            Container container = new(list);
             try
             {
                 container.Get<A0>();
@@ -96,11 +97,12 @@ namespace unit_test
         [TestMethod]
         public void TestDisposeException()
         {
-            Container container = new();
+            ServiceList list = new();
+            Container container = new(list);
             container.Dispose();
             try
             {
-                container.Construct();
+                container.Get<A0>();
                 Assert.Fail();
             }
             catch (ObjectDisposedException) { }
@@ -116,10 +118,10 @@ namespace unit_test
         [TestMethod]
         public void TestTwoConstructor()
         {
-            Container container = new();
+            ServiceList list = new();
             try
             {
-                container.Add<TwoConstructor>();
+                list.Add<TwoConstructor>();
                 Assert.Fail();
             }
             catch (ContainerException) { }
