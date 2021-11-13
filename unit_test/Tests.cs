@@ -126,5 +126,18 @@ namespace unit_test
             }
             catch (ContainerException) { }
         }
+
+        [TestMethod]
+        public void TestDoubleAdd()
+        {
+            ServiceList list = new();
+            list.Add<A0>();
+            try
+            {
+                list.Add(new A0());
+                Assert.Fail();
+            }
+            catch (ContainerException) { }
+        }
     }
 }
