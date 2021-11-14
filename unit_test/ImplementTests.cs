@@ -6,14 +6,16 @@ namespace unit_test
     [TestClass]
     public class ImplementTests
     {
-        public interface IInterface0 { };
-        public interface IInterface1 { };
-        public class BaseClass { };
+        interface IInterface0 { };
+        interface IInterface1 { };
+        class BaseClass { };
 
-        public class A : BaseClass, IInterface0, IInterface1 { }
-        public class B0 { public B0(IInterface0 x) { } }
-        public class B1 { public B1(IInterface1 x) { } }
-        public class B2 { public B2(BaseClass x) { } }
+        class A : BaseClass, IInterface0, IInterface1 { }
+        class B0 { public B0(IInterface0 x) { } }
+        class B1 { public B1(IInterface1 x) { } }
+        class B2 { public B2(BaseClass x) { } }
+        class C { public C(A x, BaseClass y, IInterface0 z) { } }
+
 
 
         [TestMethod]
@@ -30,6 +32,16 @@ namespace unit_test
         {
             ServiceList list = new();
             list.Add<A>().Is<BaseClass>();
+            list.Add<B2>();
+            new Container(list);
+        }
+
+        [TestMethod]
+        public void TestExternalImplement()
+        {
+            ServiceList list = new();
+            A a = new A();
+            list.Add(a).Is<BaseClass>();
             list.Add<B2>();
             new Container(list);
         }
@@ -81,6 +93,15 @@ namespace unit_test
                 Assert.Fail();
             }
             catch (ContainerException) { }
+        }
+
+        [TestMethod]
+        public void TestRepeatedArgument()
+        {
+            ServiceList list = new();
+            list.Add<A>().Is<BaseClass>().Is<IInterface0>();
+            list.Add<C>();
+            new Container(list);
         }
     }
 }
