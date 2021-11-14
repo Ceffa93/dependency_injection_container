@@ -7,6 +7,7 @@ namespace DIC
 
     public class Container : IDisposable
     {
+        #region public
 
         public Container(ServiceList serviceList)
         {
@@ -31,8 +32,9 @@ namespace DIC
             return (T)services[type];
         }
 
+        #endregion
 
-
+        #region private
 
         private void AddExternalServices(ServiceList serviceList)
         {
@@ -50,8 +52,7 @@ namespace DIC
                 stack.Push(type);
 
             while (stack.Count > 0)
-                if (!TryAddChildrenToStack(constructorDict, stack))
-                    CreateService(constructorDict, stack);
+                ProcessStack(constructorDict, stack);
         }
 
         private static ConstructorDict GenerateConstructorDict(ServiceList serviceList)
@@ -61,27 +62,28 @@ namespace DIC
             ConstructorDict constructorDict = new();
 
             foreach (var type in serviceList.internalServices)
-                constructorDict[type] =
-                    new Constructor(
-                        type,
-                        serviceList,
-                        implementDict);
+                constructorDict[type] = new (type, serviceList, implementDict);
 
             return constructorDict;
         }
 
         private static ImplementDict GenerateImplementDict(ServiceList serviceList)
         {
-            ImplementDict implementInfos = new();
+            ImplementDict implementDict = new();
 
-            foreach (var service in serviceList.services)
-                foreach (var implement in service.Value.implements)
-                    if (implementInfos.TryGetValue(implement, out var list))
-                        list.Add(service.Key);
-                    else
-                        implementInfos[implement] = new() { service.Key };
+            foreach (var child in serviceList.services)
+                foreach (var parent in child.Value.implements)
+                    AddToImplementDict(implementDict, child.Key, parent);
 
-            return implementInfos;
+            return implementDict;
+        }
+
+        private static void AddToImplementDict(ImplementDict implementDict, Type child, Type parent)
+        {
+            if (implementDict.TryGetValue(parent, out var list))
+                list.Add(child);
+            else
+                implementDict[parent] = new() { child };
         }
 
 
@@ -96,14 +98,19 @@ namespace DIC
             return rootTypes;
         }
 
-        private bool TryAddChildrenToStack(ConstructorDict constructorDict, Stack<Type> stack)
+        private void ProcessStack(ConstructorDict constructorDict, Stack<Type> stack)
         {
             bool bAddedChildren = false;
+            var type = stack.Peek();
 
-            foreach (var childType in constructorDict[stack.Peek()].parameters)
+            foreach (var childType in constructorDict[type].parameters)
                 bAddedChildren |= TryAddToStack(stack, childType);
 
-            return bAddedChildren;
+            if (bAddedChildren) 
+                return;
+
+            stack.Pop();
+            CreateService(constructorDict[type], type);
         }
 
         private bool TryAddToStack(Stack<Type> stack, Type type)
@@ -115,11 +122,8 @@ namespace DIC
             return true;
         }
 
-        private void CreateService(ConstructorDict constructorDict, Stack<Type> stack)
+        private void CreateService(Constructor constructor, Type type)
         {
-            var type = stack.Pop();
-            var constructor = constructorDict[type];
-
             initOrder.Add(type);
 
             var parameters = constructor.parameters;
@@ -133,6 +137,8 @@ namespace DIC
 
         private readonly Dictionary<Type, object> services;
         private readonly List<Type> initOrder;
+
+        #endregion
 
         #region dispose
 
@@ -166,16 +172,24 @@ namespace DIC
 
             constrInfo = constrList.First();
 
-            parameters = new();
+            var constrParameters = constrInfo.GetParameters();
 
+            parameters = new(constrParameters.Length);
 
-            foreach (var param in constrInfo.GetParameters())
-                if (serviceList.services.ContainsKey(param.ParameterType))
-                    parameters.Add(param.ParameterType);
-                else if (implementDict.TryGetValue(param.ParameterType, out var implementList) && implementList.Count == 1)
-                    parameters.Add(implementList.First());
-                else
-                    throw new ContainerException("Parameter <" + param + "> required by <" + type + "> cannot be resolved!");
+            foreach (var param in constrParameters)
+                parameters.Add(GetResolvedParam(serviceList, implementDict, param.ParameterType));
+        }
+
+        private static Type GetResolvedParam(ServiceList serviceList, ImplementDict implementDict, Type type)
+        {
+            if (serviceList.services.ContainsKey(type))
+                return type;
+
+            if (implementDict.TryGetValue(type, out var implementList))
+                if (implementList.Count == 1)
+                    return implementList.First();
+
+            throw new ContainerException("Parameter <" + type + "> required by <" + type + "> cannot be resolved!");
         }
 
         internal readonly ConstructorInfo constrInfo;
