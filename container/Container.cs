@@ -2,8 +2,8 @@
 
 namespace DIC
 {
-    using ImplementDict = System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<System.Type>>;
-    using ConstructorDict = System.Collections.Generic.Dictionary<System.Type, Constructor>;
+    using ImplementDict = Dictionary<Type, List<Type>>;
+    using ConstructorDict = Dictionary<Type, Constructor>;
 
     public class Container : IDisposable
     {
@@ -92,8 +92,11 @@ namespace DIC
             HashSet<Type> rootTypes = new(constructorDict.Keys);
 
             foreach (var constr in constructorDict.Values)
-                foreach (var param in constr.parameters)
-                    rootTypes.Remove(param);
+                foreach (var desc in constr.paramDescriptors)
+                    if (desc is ArrayParamDesc)
+                        Array.ForEach(((ArrayParamDesc)desc).types, element => rootTypes.Remove(element));
+                    else
+                        rootTypes.Remove(((RegularParamDesc)desc).type);
 
             return rootTypes;
         }
@@ -103,8 +106,11 @@ namespace DIC
             bool bAddedChildren = false;
             var type = stack.Peek();
 
-            foreach (var childType in constructorDict[type].parameters)
-                bAddedChildren |= TryAddToStack(stack, childType);
+            foreach (var desc in constructorDict[type].paramDescriptors)
+                if (desc is ArrayParamDesc)
+                    Array.ForEach(((ArrayParamDesc)desc).types, element => bAddedChildren |= TryAddToStack(stack, element));
+                else
+                    bAddedChildren |= TryAddToStack(stack, ((RegularParamDesc)desc).type);
 
             if (bAddedChildren) 
                 return;
@@ -126,11 +132,22 @@ namespace DIC
         {
             initOrder.Add(type);
 
-            var parameters = constructor.parameters;
-            var arguments = new List<object>(parameters.Count);
+            var paramDescriptors = constructor.paramDescriptors;
+            var arguments = new List<object>(paramDescriptors.Count);
 
-            foreach (var param in parameters)
-                arguments.Add(services[param]);
+            foreach (var desc in paramDescriptors)
+                if (desc is ArrayParamDesc)
+                {
+                    var arrayDesc = (ArrayParamDesc)desc;
+                    var types = arrayDesc.types;
+                    var arg = Array.CreateInstance(arrayDesc.baseType, types.Length);
+
+                    int idx = 0;
+                    Array.ForEach(types, element => arg.SetValue(services[element], idx++));
+                    arguments.Add(arg);
+                }
+                else
+                    arguments.Add(services[((RegularParamDesc)desc).type]);
 
             services[type] = constructor.constrInfo.Invoke(arguments.ToArray());
         }
@@ -161,6 +178,28 @@ namespace DIC
         #endregion
     }
 
+    internal abstract class ParamDesc { };
+
+    internal class ArrayParamDesc: ParamDesc
+    {
+        public ArrayParamDesc(Type[] types, Type baseType)
+        {
+            this.types = types;
+            this.baseType = baseType;
+        }
+        public Type[] types;
+        public Type baseType;
+    }
+
+    internal class RegularParamDesc : ParamDesc
+    {
+        public RegularParamDesc(Type type) 
+        { 
+            this.type = type;
+        }
+        public Type type;
+    }
+
     internal class Constructor
     {
         public Constructor(Type type, ServiceList serviceList, ImplementDict implementDict)
@@ -172,27 +211,44 @@ namespace DIC
 
             constrInfo = constrList.First();
 
-            var constrParameters = constrInfo.GetParameters();
+            var parameters = constrInfo.GetParameters();
 
-            parameters = new(constrParameters.Length);
+            paramDescriptors = new(parameters.Length);
 
-            foreach (var param in constrParameters)
-                parameters.Add(GetResolvedParam(serviceList, implementDict, param.ParameterType));
+            foreach (var param in parameters)
+                if(param.ParameterType.IsArray)
+                    paramDescriptors.Add(new ArrayParamDesc(GetResolvedArrayParam(serviceList, implementDict, param.ParameterType), param.ParameterType.GetElementType()));
+                else
+                    paramDescriptors.Add(new RegularParamDesc(GetResolvedRegularParam(serviceList, implementDict, param.ParameterType)));
+
         }
 
-        private static Type GetResolvedParam(ServiceList serviceList, ImplementDict implementDict, Type type)
+        private static Type[] GetResolvedArrayParam(ServiceList serviceList, ImplementDict implementDict, Type type)
+        {
+            var elementType = type.GetElementType();
+            var implementList = implementDict.GetValueOrDefault(elementType);
+
+            if (implementList is not null)
+                return implementList.ToArray();
+
+            throw new ContainerException("Array Parameter <" + type + "> cannot be resolved!");
+        }
+
+        private static Type GetResolvedRegularParam(ServiceList serviceList, ImplementDict implementDict, Type type)
         {
             if (serviceList.services.ContainsKey(type))
                 return type;
 
-            if (implementDict.TryGetValue(type, out var implementList))
+            var implementList = implementDict.GetValueOrDefault(type);
+
+            if (implementList is not null)
                 return implementList.First();
 
-            throw new ContainerException("Parameter <" + type + "> required by <" + type + "> cannot be resolved!");
+            throw new ContainerException("Regular Parameter <" + type + "> cannot be resolved!");
         }
 
         internal readonly ConstructorInfo constrInfo;
-        internal readonly List<Type> parameters;
+        internal readonly List<ParamDesc> paramDescriptors;
     };
 
     public class ContainerException : Exception
