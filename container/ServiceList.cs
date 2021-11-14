@@ -58,7 +58,15 @@
             public Service Is<T>()
                where T : class
             {
-                implements.Add(typeof(T));
+                var parentType = typeof(T);
+
+                if (parentType == type)
+                    throw new ContainerException("Type <" + type + "> cannot implement itself!");
+
+                if (!parentType.IsAssignableFrom(type))
+                    throw new ContainerException("<" + parentType + "> is not a parent class/interface of <" + type + ">!");
+
+                implements.Add(parentType);
                 return this;
             }
 

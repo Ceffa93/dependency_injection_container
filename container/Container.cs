@@ -186,8 +186,7 @@ namespace DIC
                 return type;
 
             if (implementDict.TryGetValue(type, out var implementList))
-                if (implementList.Count == 1)
-                    return implementList.First();
+                return implementList.First();
 
             throw new ContainerException("Parameter <" + type + "> required by <" + type + "> cannot be resolved!");
         }
