@@ -26,7 +26,16 @@ namespace unit_test
         }
 
         [TestMethod]
-        public void TestSelfImplement()
+        public void TestEmptyArray()
+        {
+            ServiceList list = new();
+            list.Add<B0>();
+            Container container = new Container(list);
+            Assert.AreEqual(container.Get<B0>().count, 0);
+        }
+
+        [TestMethod]
+        public void Test()
         {
             ServiceList list = new();
             try

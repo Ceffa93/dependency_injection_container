@@ -217,13 +217,18 @@ namespace DIC
 
             foreach (var param in parameters)
                 if(param.ParameterType.IsArray)
-                    paramDescriptors.Add(new ArrayParamDesc(GetResolvedArrayParam(serviceList, implementDict, param.ParameterType), param.ParameterType.GetElementType()));
+                    paramDescriptors.Add(
+                        new ArrayParamDesc(
+                            GetResolvedArrayParam(implementDict, param.ParameterType, type),
+                            param.ParameterType.GetElementType()));
                 else
-                    paramDescriptors.Add(new RegularParamDesc(GetResolvedRegularParam(serviceList, implementDict, param.ParameterType)));
+                    paramDescriptors.Add(
+                        new RegularParamDesc(
+                            GetResolvedRegularParam(serviceList, implementDict, param.ParameterType, type)));
 
         }
 
-        private static Type[] GetResolvedArrayParam(ServiceList serviceList, ImplementDict implementDict, Type type)
+        private static Type[] GetResolvedArrayParam(ImplementDict implementDict, Type type, Type parentType)
         {
             var elementType = type.GetElementType();
             var implementList = implementDict.GetValueOrDefault(elementType);
@@ -231,11 +236,14 @@ namespace DIC
             if (implementList is not null)
                 return implementList.ToArray();
 
-            throw new ContainerException("Array Parameter <" + type + "> cannot be resolved!");
+            return new Type[0];
         }
 
-        private static Type GetResolvedRegularParam(ServiceList serviceList, ImplementDict implementDict, Type type)
+        private static Type GetResolvedRegularParam(ServiceList serviceList, ImplementDict implementDict, Type type, Type parentType)
         {
+            if(type == parentType)
+                throw new ContainerException("Service <" + parentType + "> cannot depend on itself!");
+
             if (serviceList.services.ContainsKey(type))
                 return type;
 
@@ -244,7 +252,7 @@ namespace DIC
             if (implementList is not null)
                 return implementList.First();
 
-            throw new ContainerException("Regular Parameter <" + type + "> cannot be resolved!");
+            throw new ContainerException("Regular Parameter <" + type + "> required by <" + parentType + "> cannot be resolved!");
         }
 
         internal readonly ConstructorInfo constrInfo;

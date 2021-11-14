@@ -71,6 +71,21 @@ namespace unit_test
             catch (ContainerException) {}
         }
 
+        class SelfDep { public SelfDep (SelfDep x) { } }
+
+        [TestMethod]
+        public void TestSelfDependency()
+        {
+            ServiceList list = new();
+            list.Add<SelfDep>();
+            try
+            {
+                new Container(list);
+                Assert.Fail();
+            }
+            catch (ContainerException) { }
+        }
+
         [TestMethod]
         public void TestGetService()
         {
