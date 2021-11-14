@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
+using DIC;
 
 namespace unit_test
 {
@@ -50,6 +51,7 @@ namespace unit_test
             A0? a0 = null;
             try
             {
+#pragma warning disable CS8634 
                 list.Add(a0);
                 Assert.Fail();
             }
@@ -119,10 +121,10 @@ namespace unit_test
         public void TestTwoConstructor()
         {
             ServiceList list = new();
+            list.Add<TwoConstructor>();
             try
             {
-                list.Add<TwoConstructor>();
-                Assert.Fail();
+                new Container(list);
             }
             catch (ContainerException) { }
         }

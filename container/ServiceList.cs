@@ -1,43 +1,69 @@
-﻿using System.Reflection;
-
-public class ServiceList
+﻿namespace DIC
 {
-    public ServiceList()
+    public class ServiceList
     {
-        externalServiceInfos = new();
-        internalServiceInfos = new();
-    }
-    public ServiceInfo Add<T>(T externalService)
-       where T : class
-    {
-        Type type = typeof(T);
+        public ServiceList()
+        {
+            externalServices = new();
+            internalServices = new();
+            services = new();
+        }
 
-        serviceAlreadyPresentException(type);
+        public Service Add<T>(T externalService)
+           where T : class
+        {
+            Type type = typeof(T);
 
-        ExternalServiceInfo info = new(type, externalService);
-        externalServiceInfos[type] = info;
-        return info;
-    }
+            serviceAlreadyPresentException(type);
 
-    public ServiceInfo Add<T>()
-        where T : class
-    {
-        Type type = typeof(T);
-        
-        serviceAlreadyPresentException(type);
+            if (externalService is null)
+                throw new ContainerException("External service <" + type + "> is null!");
 
-        InternalServiceInfo info = new (type);
-        internalServiceInfos[type] = info;
-        return info;
-    }
+            Service service = new(type);
+            services[type] = service;
+            externalServices[type] = externalService;
+            return service;
+        }
 
-    private void serviceAlreadyPresentException(Type type)
-    {
-        if (internalServiceInfos.ContainsKey(type) || externalServiceInfos.ContainsKey(type))
-            throw new ContainerException("Requested service <" + type + "> is already present!");
-    }
+        public Service Add<T>()
+            where T : class
+        {
+            Type type = typeof(T);
 
-    internal readonly Dictionary<Type, InternalServiceInfo> internalServiceInfos;
-    internal readonly Dictionary<Type, ExternalServiceInfo> externalServiceInfos;
-};
+            serviceAlreadyPresentException(type);
 
+            Service service = new(type);
+            services[type] = service;
+            internalServices.Add(type);
+            return service;
+        }
+
+        private void serviceAlreadyPresentException(Type type)
+        {
+            if (services.ContainsKey(type))
+                throw new ContainerException("Requested service <" + type + "> is already present!");
+        }
+
+        internal readonly Dictionary<Type, object> externalServices;
+        internal readonly HashSet<Type> internalServices;
+        internal readonly Dictionary<Type, Service> services;
+
+        public class Service
+        {
+            public Service(Type type)
+            {
+                this.type = type;
+                implements = new();
+            }
+            public Service Is<T>()
+               where T : class
+            {
+                implements.Add(typeof(T));
+                return this;
+            }
+
+            internal readonly HashSet<Type> implements;
+            internal readonly Type type;
+        };
+    };
+}

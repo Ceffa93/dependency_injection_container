@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+using DIC;
 
 namespace unit_test
 {
@@ -15,7 +15,7 @@ namespace unit_test
         public void TestImplement()
         {
             ServiceList list = new();
-            list.Add<A>().Implement<IInterface>();
+            list.Add<A>().Is<IInterface>();
             list.Add<B>();
             new Container(list);
         }

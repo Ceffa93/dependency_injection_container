@@ -1,190 +1,190 @@
 ﻿using System.Reflection;
 
-using ImplementInfos = System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<System.Type>>;
-
-internal class Constructor
+namespace DIC
 {
-    public Constructor(ConstructorInfo constrInfo, List<Type> parameters)
+    using ImplementDict = System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<System.Type>>;
+    using ConstructorDict = System.Collections.Generic.Dictionary<System.Type, Constructor>;
+
+    public class Container : IDisposable
     {
-        this.constrInfo = constrInfo;
-        this.parameters = parameters;
-    }
-    internal readonly ConstructorInfo constrInfo;
-    internal readonly List<Type> parameters;
-};
 
-public class Container : IDisposable
-{
+        public Container(ServiceList serviceList)
+        {
+            initOrder = new();
+            services = new();
+
+            AddExternalServices(serviceList);
+            AddInternalServices(serviceList);
+        }
+
+        public T Get<T>()
+          where T : class
+        {
+            if (bIsDisposed)
+                throw new ObjectDisposedException("Container has been disposed!");
+
+            var type = typeof(T);
+
+            if (!services.ContainsKey(type))
+                throw new ContainerException("Service <" + type + "> not found!");
+
+            return (T)services[type];
+        }
 
 
-    public Container(ServiceList serviceList)
-    {
-        initOrder = new();
-        services = new();
 
-        var internalServices = GetResolvedInternalServicesInfo(serviceList);
-        AddExternalServices(serviceList);
-        AddInternalServices(internalServices);
-    }
 
-    public T Get<T>()
-      where T : class
-    {
-        if (bIsDisposed)
-            throw new ObjectDisposedException("Container has been disposed!");
+        private void AddExternalServices(ServiceList serviceList)
+        {
+            foreach (var service in serviceList.externalServices)
+                services[service.Key] = service.Value;
+        }
 
-        var type = typeof(T);
+        private void AddInternalServices(ServiceList serviceList)
+        {
+            var constructorDict = GenerateConstructorDict(serviceList);
 
-        if (!services.ContainsKey(type))
-            throw new ContainerException("Service <" + type + "> not found!");
+            Stack<Type> stack = new(constructorDict.Count);
 
-        return (T)services[type];
-    }
+            foreach (var type in FindRootTypes(constructorDict))
+                stack.Push(type);
 
-    private static Dictionary<Type, Constructor> GetResolvedInternalServicesInfo(ServiceList serviceList)
-    {
-        Dictionary<Type, Constructor> internalServices = new();
-        var implementInfos = GenerateImplementInfos(serviceList);
+            while (stack.Count > 0)
+                if (!TryAddChildrenToStack(constructorDict, stack))
+                    CreateService(constructorDict, stack);
+        }
 
-        foreach (var service in serviceList.internalServiceInfos)
-            internalServices[service.Key] = 
-                new Constructor(       
-                    service.Value.constructorInfo,
-                    GetResolvedParameters(
-                        service.Key,
+        private static ConstructorDict GenerateConstructorDict(ServiceList serviceList)
+        {
+            var implementDict = GenerateImplementDict(serviceList);
+
+            ConstructorDict constructorDict = new();
+
+            foreach (var type in serviceList.internalServices)
+                constructorDict[type] =
+                    new Constructor(
+                        type,
                         serviceList,
-                        implementInfos));
+                        implementDict);
 
-        return internalServices;
-    }
+            return constructorDict;
+        }
 
-    private static ImplementInfos GenerateImplementInfos(ServiceList serviceList)
-    {
-        ImplementInfos implementInfos = new();
+        private static ImplementDict GenerateImplementDict(ServiceList serviceList)
+        {
+            ImplementDict implementInfos = new();
 
-        var serviceInfos = 
-            serviceList.internalServiceInfos.Values.Cast<ServiceInfo>()
-            .Concat(serviceList.externalServiceInfos.Values.Cast<ServiceInfo>());
+            foreach (var service in serviceList.services)
+                foreach (var implement in service.Value.implements)
+                    if (implementInfos.TryGetValue(implement, out var list))
+                        list.Add(service.Key);
+                    else
+                        implementInfos[implement] = new() { service.Key };
 
-        foreach (var service in serviceInfos)
-            foreach (var implement in service.implements)
-                if (implementInfos.TryGetValue(implement, out var list))
-                    list.Add(service.type);
-                else 
-                    implementInfos[implement] = new() { service.type };
-
-        return implementInfos;
-    }
-
-    private static List<Type> GetResolvedParameters(Type type, ServiceList serviceList, ImplementInfos implementInfos)
-    {
-        List<Type> resolvedParams = new();
-
-        var parameters = serviceList.internalServiceInfos[type].constructorInfo.GetParameters();
-
-        var serviceInfos =
-            serviceList.internalServiceInfos.Keys
-            .Concat(serviceList.externalServiceInfos.Keys);
-
-        foreach (var param in parameters)
-            if (serviceInfos.Contains(param.ParameterType)) 
-                resolvedParams.Add(param.ParameterType);
-            else if (implementInfos.TryGetValue(param.ParameterType, out var implementInfo) && implementInfo.Count == 1)
-                resolvedParams.Add(implementInfo[0]);
-            else
-                throw new ContainerException("Parameter <" + param + "> required by <" + type + "> cannot be resolved!");
-
-        return resolvedParams;
-    }
+            return implementInfos;
+        }
 
 
-    private void AddExternalServices(ServiceList serviceList)
-    {
-        foreach (var service in serviceList.externalServiceInfos.Values)
-            services[service.type] = service.obj;
-    }
-    private void AddInternalServices(Dictionary<Type, Constructor> internalServiceInfos)
-    {
-        Stack<Type> stack = new(internalServiceInfos.Count);
+        private static HashSet<Type> FindRootTypes(ConstructorDict constructorDict)
+        {
+            HashSet<Type> rootTypes = new(constructorDict.Keys);
 
-        foreach (var type in FindRootTypes(internalServiceInfos))
+            foreach (var constr in constructorDict.Values)
+                foreach (var param in constr.parameters)
+                    rootTypes.Remove(param);
+
+            return rootTypes;
+        }
+
+        private bool TryAddChildrenToStack(ConstructorDict constructorDict, Stack<Type> stack)
+        {
+            bool bAddedChildren = false;
+
+            foreach (var childType in constructorDict[stack.Peek()].parameters)
+                bAddedChildren |= TryAddToStack(stack, childType);
+
+            return bAddedChildren;
+        }
+
+        private bool TryAddToStack(Stack<Type> stack, Type type)
+        {
+            if (services.ContainsKey(type))
+                return false;
+
             stack.Push(type);
+            return true;
+        }
 
-        while (stack.Count > 0)
-            if(!TryAddChildrenToStack(internalServiceInfos, stack, stack.Peek()))
-                CreateService(internalServiceInfos[stack.Pop()]);
+        private void CreateService(ConstructorDict constructorDict, Stack<Type> stack)
+        {
+            var type = stack.Pop();
+            var constructor = constructorDict[type];
+
+            initOrder.Add(type);
+
+            var parameters = constructor.parameters;
+            var arguments = new List<object>(parameters.Count);
+
+            foreach (var param in parameters)
+                arguments.Add(services[param]);
+
+            services[type] = constructor.constrInfo.Invoke(arguments.ToArray());
+        }
+
+        private readonly Dictionary<Type, object> services;
+        private readonly List<Type> initOrder;
+
+        #region dispose
+
+        public void Dispose()
+        {
+            if (!bIsDisposed)
+                foreach (var type in initOrder.AsEnumerable().Reverse())
+                    TryDispose(services[type]);
+
+            bIsDisposed = true;
+        }
+        private void TryDispose(object obj)
+        {
+            if (obj is IDisposable)
+                ((IDisposable)obj).Dispose();
+        }
+
+        private bool bIsDisposed;
+
+        #endregion
     }
 
-    private HashSet<Type> FindRootTypes(Dictionary<Type, Constructor> internalServiceInfos)
+    internal class Constructor
     {
-        HashSet<Type> rootTypes = new (internalServiceInfos.Keys);
+        public Constructor(Type type, ServiceList serviceList, ImplementDict implementDict)
+        {
+            var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
 
-        foreach (var info in internalServiceInfos.Values)
-            foreach (var param in info.parameters)
-                rootTypes.Remove(param);
+            if (constrList.Length > 1)
+                throw new ContainerException("Class <" + type + "> must specify a single public constructor!");
 
-        return rootTypes;
-    }
+            constrInfo = constrList.First();
 
-    private bool TryAddChildrenToStack(Dictionary<Type, Constructor> internalServiceInfos, Stack<Type> stack, Type parentType)
+            parameters = new();
+
+
+            foreach (var param in constrInfo.GetParameters())
+                if (serviceList.services.ContainsKey(param.ParameterType))
+                    parameters.Add(param.ParameterType);
+                else if (implementDict.TryGetValue(param.ParameterType, out var implementList) && implementList.Count == 1)
+                    parameters.Add(implementList.First());
+                else
+                    throw new ContainerException("Parameter <" + param + "> required by <" + type + "> cannot be resolved!");
+        }
+
+        internal readonly ConstructorInfo constrInfo;
+        internal readonly List<Type> parameters;
+    };
+
+    public class ContainerException : Exception
     {
-        bool bAddedChildren = false;
+        public ContainerException(string? message) : base(message) { }
+    };
 
-        foreach (var childType in internalServiceInfos[parentType].parameters)
-            bAddedChildren |= TryAddToStack(stack, childType);
-
-        return bAddedChildren;
-    }
-
-    private bool TryAddToStack(Stack<Type> stack, Type type)
-    {
-       if (services.ContainsKey(type))
-            return false;
-
-        stack.Push(type);
-        return true;
-    }
-
-    private void CreateService(Constructor constructor)
-    {
-        Type type = constructor.constrInfo.DeclaringType;
-        initOrder.Add(type);
-
-        var parameters = constructor.parameters;
-        var arguments = new List<object>(parameters.Count);
-
-        foreach (var param in parameters)
-            arguments.Add(services[param]);
-
-        services[type] = constructor.constrInfo.Invoke(arguments.ToArray());
-    }
-
-    private readonly Dictionary<Type, object> services;
-    private readonly List<Type> initOrder;
-
-    #region dispose
-
-    public void Dispose()
-    {
-        if (!bIsDisposed)
-            foreach (var type in initOrder.AsEnumerable().Reverse())
-                TryDispose(services[type]);
-
-        bIsDisposed = true;
-    }
-    private void TryDispose(object obj)
-    {
-        if (obj is IDisposable)
-            ((IDisposable)obj).Dispose();
-    }
-
-    private bool bIsDisposed;
-
-    #endregion
 }
-
-public class ContainerException : Exception
-{
-    public ContainerException(string? message) : base(message) { }
-};
-
