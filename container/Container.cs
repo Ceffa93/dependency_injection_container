@@ -1,8 +1,5 @@
-﻿using System.Reflection;
-
-namespace DIC
+﻿namespace DI
 {
-    using ImplementDict = Dictionary<Type, List<Type>>;
     using ConstructorDict = Dictionary<Type, Constructor>;
 
     public class Container : IDisposable
@@ -14,8 +11,8 @@ namespace DIC
             initOrder = new();
             services = new();
 
-            AddExternalServices(serviceList);
-            AddInternalServices(serviceList);
+            AddExternalServices(serviceList.externalServices);
+            AddInternalServices(serviceList.internalServices, serviceList.serviceDescriptors);
         }
 
         public T Get<T>()
@@ -27,7 +24,7 @@ namespace DIC
             var type = typeof(T);
 
             if (!services.ContainsKey(type))
-                throw new ContainerException("Service <" + type + "> not found!");
+                throw new ContainerException("Service <" + type.Name + "> not found!");
 
             return (T)services[type];
         }
@@ -36,124 +33,71 @@ namespace DIC
 
         #region private
 
-        private void AddExternalServices(ServiceList serviceList)
+        private void AddExternalServices(ObjectDict externalServices)
         {
-            foreach (var service in serviceList.externalServices)
+            foreach (var service in externalServices)
                 services[service.Key] = service.Value;
         }
 
-        private void AddInternalServices(ServiceList serviceList)
+        private void AddInternalServices(TypeSet internalServices, ServiceDescDict serviceDescriptors)
         {
-            var constructorDict = GenerateConstructorDict(serviceList);
+            var constructorDict = GenerateConstructorDict(internalServices, serviceDescriptors);
 
-            Stack<Type> stack = new(constructorDict.Count);
+            TypeStack typeStack = new(constructorDict.Count);
 
             foreach (var type in FindRootTypes(constructorDict))
-                stack.Push(type);
+                typeStack.Push(type);
 
-            while (stack.Count > 0)
-                ProcessStack(constructorDict, stack);
+            while (typeStack.Count > 0)
+                ProcessStack(constructorDict, typeStack);
         }
 
-        private static ConstructorDict GenerateConstructorDict(ServiceList serviceList)
+        private static ConstructorDict GenerateConstructorDict(TypeSet internalServices, ServiceDescDict serviceDescriptors)
         {
-            var implementDict = GenerateImplementDict(serviceList);
+            var implementDict = GenerateImplementDict(serviceDescriptors);
+            var constructorDict = new ConstructorDict();
 
-            ConstructorDict constructorDict = new();
-
-            foreach (var type in serviceList.internalServices)
-                constructorDict[type] = new (type, serviceList, implementDict);
+            foreach (var type in internalServices)
+                constructorDict[type] = new (type, serviceDescriptors, implementDict);
 
             return constructorDict;
         }
 
-        private static ImplementDict GenerateImplementDict(ServiceList serviceList)
+        private static ImplementDict GenerateImplementDict(ServiceDescDict serviceDescriptors)
         {
             ImplementDict implementDict = new();
 
-            foreach (var child in serviceList.services)
-                foreach (var parent in child.Value.implements)
-                    AddToImplementDict(implementDict, child.Key, parent);
+            foreach (var desc in serviceDescriptors.Values)
+                desc.AddImplementsToDict(implementDict);
 
             return implementDict;
         }
 
-        private static void AddToImplementDict(ImplementDict implementDict, Type child, Type parent)
+        private static TypeSet FindRootTypes(ConstructorDict constructorDict)
         {
-            if (implementDict.TryGetValue(parent, out var list))
-                list.Add(child);
-            else
-                implementDict[parent] = new() { child };
-        }
-
-
-        private static HashSet<Type> FindRootTypes(ConstructorDict constructorDict)
-        {
-            HashSet<Type> rootTypes = new(constructorDict.Keys);
+            TypeSet rootTypes = new(constructorDict.Keys);
 
             foreach (var constr in constructorDict.Values)
-                foreach (var desc in constr.paramDescriptors)
-                    if (desc is ArrayParamDesc)
-                        Array.ForEach(((ArrayParamDesc)desc).types, element => rootTypes.Remove(element));
-                    else
-                        rootTypes.Remove(((RegularParamDesc)desc).type);
+                constr.RemoveParamsFromSet(rootTypes);
 
             return rootTypes;
         }
 
-        private void ProcessStack(ConstructorDict constructorDict, Stack<Type> stack)
+        private void ProcessStack(ConstructorDict constructorDict, TypeStack typeStack)
         {
-            bool bAddedChildren = false;
-            var type = stack.Peek();
+            var type = typeStack.Peek();
+            var constructor = constructorDict[type];
 
-            foreach (var desc in constructorDict[type].paramDescriptors)
-                if (desc is ArrayParamDesc)
-                    Array.ForEach(((ArrayParamDesc)desc).types, element => bAddedChildren |= TryAddToStack(stack, element));
-                else
-                    bAddedChildren |= TryAddToStack(stack, ((RegularParamDesc)desc).type);
-
-            if (bAddedChildren) 
+            if (constructor.TryAddParamsToStack(typeStack, services)) 
                 return;
 
-            stack.Pop();
-            CreateService(constructorDict[type], type);
-        }
-
-        private bool TryAddToStack(Stack<Type> stack, Type type)
-        {
-            if (services.ContainsKey(type))
-                return false;
-
-            stack.Push(type);
-            return true;
-        }
-
-        private void CreateService(Constructor constructor, Type type)
-        {
+            typeStack.Pop();
             initOrder.Add(type);
-
-            var paramDescriptors = constructor.paramDescriptors;
-            var arguments = new List<object>(paramDescriptors.Count);
-
-            foreach (var desc in paramDescriptors)
-                if (desc is ArrayParamDesc)
-                {
-                    var arrayDesc = (ArrayParamDesc)desc;
-                    var types = arrayDesc.types;
-                    var arg = Array.CreateInstance(arrayDesc.baseType, types.Length);
-
-                    int idx = 0;
-                    Array.ForEach(types, element => arg.SetValue(services[element], idx++));
-                    arguments.Add(arg);
-                }
-                else
-                    arguments.Add(services[((RegularParamDesc)desc).type]);
-
-            services[type] = constructor.constrInfo.Invoke(arguments.ToArray());
+            services[type] = constructor.Construct(services);
         }
-
-        private readonly Dictionary<Type, object> services;
-        private readonly List<Type> initOrder;
+       
+        private readonly ObjectDict services;
+        private readonly TypeList initOrder;
 
         #endregion
 
@@ -177,91 +121,4 @@ namespace DIC
 
         #endregion
     }
-
-    internal abstract class ParamDesc { };
-
-    internal class ArrayParamDesc: ParamDesc
-    {
-        public ArrayParamDesc(Type[] types, Type baseType)
-        {
-            this.types = types;
-            this.baseType = baseType;
-        }
-        public Type[] types;
-        public Type baseType;
-    }
-
-    internal class RegularParamDesc : ParamDesc
-    {
-        public RegularParamDesc(Type type) 
-        { 
-            this.type = type;
-        }
-        public Type type;
-    }
-
-    internal class Constructor
-    {
-        public Constructor(Type type, ServiceList serviceList, ImplementDict implementDict)
-        {
-            var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-
-            if (constrList.Length > 1)
-                throw new ContainerException("Class <" + type + "> must specify a single public constructor!");
-
-            constrInfo = constrList.First();
-
-            var parameters = constrInfo.GetParameters();
-
-            paramDescriptors = new(parameters.Length);
-
-            foreach (var param in parameters)
-                if(param.ParameterType.IsArray)
-                    paramDescriptors.Add(
-                        new ArrayParamDesc(
-                            GetResolvedArrayParam(implementDict, param.ParameterType, type),
-                            param.ParameterType.GetElementType()));
-                else
-                    paramDescriptors.Add(
-                        new RegularParamDesc(
-                            GetResolvedRegularParam(serviceList, implementDict, param.ParameterType, type)));
-
-        }
-
-        private static Type[] GetResolvedArrayParam(ImplementDict implementDict, Type type, Type parentType)
-        {
-            var elementType = type.GetElementType();
-            var implementList = implementDict.GetValueOrDefault(elementType);
-
-            if (implementList is not null)
-                return implementList.ToArray();
-
-            return new Type[0];
-        }
-
-        private static Type GetResolvedRegularParam(ServiceList serviceList, ImplementDict implementDict, Type type, Type parentType)
-        {
-            if(type == parentType)
-                throw new ContainerException("Service <" + parentType + "> cannot depend on itself!");
-
-            if (serviceList.services.ContainsKey(type))
-                return type;
-
-            var implementList = implementDict.GetValueOrDefault(type);
-
-            if (implementList is not null)
-                return implementList.First();
-
-            throw new ContainerException("Regular Parameter <" + type + "> required by <" + parentType + "> cannot be resolved!");
-        }
-
-        internal readonly ConstructorInfo constrInfo;
-        internal readonly List<ParamDesc> paramDescriptors;
-    };
-
-    public class ContainerException : Exception
-    {
-        public ContainerException(string? message) : base(message) { }
-    };
-
 }

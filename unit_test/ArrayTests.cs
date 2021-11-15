@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using DIC;
+using DI;
 
 namespace unit_test
 {
@@ -35,7 +35,7 @@ namespace unit_test
         }
 
         [TestMethod]
-        public void Test()
+        public void SelfTest()
         {
             ServiceList list = new();
             try

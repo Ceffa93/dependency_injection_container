@@ -1,6 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
-using DIC;
+using DI;
 
 namespace unit_test
 {
@@ -145,13 +145,44 @@ namespace unit_test
         }
 
         [TestMethod]
-        public void TestDoubleAdd()
+        public void TestDoubleInternal()
         {
             ServiceList list = new();
             list.Add<A0>();
+            list.Add<A0>();
+        }
+
+        [TestMethod]
+        public void TestInternalExternal()
+        {
+            ServiceList list = new();
+            list.Add<A0>();
+            list.Add(new A0());
+            list.Add<A0>();
+        }
+
+        [TestMethod]
+        public void TestDoubleExternal()
+        {
+            ServiceList list = new();
+            list.Add(new A0());
             try
             {
                 list.Add(new A0());
+                Assert.Fail();
+            } catch (ContainerException) { }
+        }
+
+        [TestMethod]
+        public void TestDoubleAddExternal()
+        {
+            ServiceList list = new();
+            A0 x = new();
+            A0 y = new();
+            list.Add(x);
+            try
+            {
+                list.Add(y);
                 Assert.Fail();
             }
             catch (ContainerException) { }

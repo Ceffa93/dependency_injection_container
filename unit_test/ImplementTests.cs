@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using DIC;
+using DI;
 
 namespace unit_test
 {

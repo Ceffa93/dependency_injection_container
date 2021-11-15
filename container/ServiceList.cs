@@ -1,4 +1,4 @@
-﻿namespace DIC
+﻿namespace DI
 {
     public class ServiceList
     {
@@ -6,72 +6,104 @@
         {
             externalServices = new();
             internalServices = new();
-            services = new();
+            serviceDescriptors = new();
         }
 
-        public Service Add<T>(T externalService)
+        public ServiceDesc Add<T>(T externalService)
            where T : class
         {
             Type type = typeof(T);
 
-            serviceAlreadyPresentException(type);
-
             if (externalService is null)
-                throw new ContainerException("External service <" + type + "> is null!");
+                throw new ContainerException("External service <" + type.Name + "> is null!");
 
-            Service service = new(type);
-            services[type] = service;
-            externalServices[type] = externalService;
-            return service;
+            AddExternalService(type, externalService);
+            AddServiceDescriptor(type);
+
+            return serviceDescriptors[type];
         }
 
-        public Service Add<T>()
+        public ServiceDesc Add<T>()
             where T : class
         {
             Type type = typeof(T);
 
-            serviceAlreadyPresentException(type);
+            AddInternalService(type);
+            AddServiceDescriptor(type);
 
-            Service service = new(type);
-            services[type] = service;
-            internalServices.Add(type);
-            return service;
+            return serviceDescriptors[type];
         }
 
-        private void serviceAlreadyPresentException(Type type)
+        public void Add<T>(ServiceList sublist)
+            where T : class
         {
-            if (services.ContainsKey(type))
-                throw new ContainerException("Requested service <" + type + "> is already present!");
+            Type rootType = typeof(T);
+
+            if(!sublist.serviceDescriptors.ContainsKey(rootType))
+                throw new ContainerException("Sublist does not contain root service <" + rootType.Name + ">!");
+
+            foreach (var service in sublist.externalServices)
+                AddExternalService(service.Key, service.Value);
+
+            foreach (var service in sublist.internalServices)
+                AddInternalService(service);
+
+            foreach (var service in sublist.serviceDescriptors.Values)
+                AddSubListServiceDescriptor(rootType, service);
         }
 
-        internal readonly Dictionary<Type, object> externalServices;
-        internal readonly HashSet<Type> internalServices;
-        internal readonly Dictionary<Type, Service> services;
-
-        public class Service
+        private void AddSubListServiceDescriptor(Type rootType, ServiceDesc subDesc)
         {
-            public Service(Type type)
-            {
-                this.type = type;
-                implements = new();
-            }
-            public Service Is<T>()
-               where T : class
-            {
-                var parentType = typeof(T);
+            if (serviceDescriptors.ContainsKey(subDesc.type))
+                MergeSubListServiceDescriptor(rootType, subDesc);
+            else
+                NewSubListServiceDescriptor(rootType, subDesc);
+        }
 
-                if (parentType == type)
-                    throw new ContainerException("Type <" + type + "> cannot implement itself!");
+        private void MergeSubListServiceDescriptor(Type rootType, ServiceDesc subDesc)
+        {
+            var desc = serviceDescriptors[subDesc.type];
+            desc.implements.Union(subDesc.implements);
+            desc.roots.Add(rootType);
+        }
 
-                if (!parentType.IsAssignableFrom(type))
-                    throw new ContainerException("<" + parentType + "> is not a parent class/interface of <" + type + ">!");
+        private void NewSubListServiceDescriptor(Type rootType, ServiceDesc subDesc)
+        {
+            var type = subDesc.type;
+            var desc = serviceDescriptors[type] = subDesc;
 
-                implements.Add(parentType);
-                return this;
-            }
+            desc.roots.Add(rootType);
+            if (type != rootType)
+                desc.roots.Remove(ROOT);
+        }
 
-            internal readonly HashSet<Type> implements;
-            internal readonly Type type;
-        };
+        private void AddExternalService(Type type, object service)
+        {
+            if (externalServices.ContainsKey(type))
+                throw new ContainerException("External service <" + type.Name + "> already present!");
+
+            externalServices[type] = service;
+
+            if (internalServices.Contains(type))
+                internalServices.Remove(type);
+        }
+
+        private void AddInternalService(Type type)
+        {
+            if (!serviceDescriptors.ContainsKey(type))
+                internalServices.Add(type); 
+        }
+
+        private void AddServiceDescriptor(Type type)
+        {
+            if (!serviceDescriptors.ContainsKey(type))
+                serviceDescriptors[type] = new(type);
+            serviceDescriptors[type].roots.Add(ROOT);
+        }
+
+        internal readonly ObjectDict externalServices;
+        internal readonly TypeSet internalServices;
+        internal readonly ServiceDescDict serviceDescriptors;
+        internal readonly static Type ROOT = typeof(void);
     };
 }
