@@ -10,6 +10,9 @@
         {
             initOrder = new();
             services = new();
+            implementDict = new();
+
+            GenerateImplementDict(serviceList.serviceDescriptors);
 
             AddExternalServices(serviceList.externalServices);
             AddInternalServices(serviceList.internalServices, serviceList.serviceDescriptors);
@@ -27,6 +30,26 @@
                 throw new ContainerException("Service <" + type.Name + "> not found!");
 
             return (T)services[type];
+        }
+        public void Get<T>(out T[] implementServices)
+          where T : class
+        {
+            if (bIsDisposed)
+                throw new ObjectDisposedException("Container has been disposed!");
+
+            var type = typeof(T);
+
+            if (!implementDict.ContainsKey(type))
+                throw new ContainerException("No service implements <" + type.Name + ">!");
+
+            var implements = implementDict[type];
+
+            var serviceList = new List<T>(implements.Count);
+
+            foreach (var serviceType in implements)
+                serviceList.Add((T)services[serviceType]);
+               
+            implementServices = serviceList.ToArray();
         }
 
         #endregion
@@ -52,9 +75,8 @@
                 ProcessStack(constructorDict, typeStack);
         }
 
-        private static ConstructorDict GenerateConstructorDict(TypeSet internalServices, ServiceDescDict serviceDescriptors)
+        private ConstructorDict GenerateConstructorDict(TypeSet internalServices, ServiceDescDict serviceDescriptors)
         {
-            var implementDict = GenerateImplementDict(serviceDescriptors);
             var constructorDict = new ConstructorDict();
 
             foreach (var type in internalServices)
@@ -63,14 +85,10 @@
             return constructorDict;
         }
 
-        private static ImplementDict GenerateImplementDict(ServiceDescDict serviceDescriptors)
+        private void GenerateImplementDict(ServiceDescDict serviceDescriptors)
         {
-            ImplementDict implementDict = new();
-
             foreach (var desc in serviceDescriptors.Values)
                 desc.AddImplementsToDict(implementDict);
-
-            return implementDict;
         }
 
         private static TypeSet FindRootTypes(ConstructorDict constructorDict)
@@ -98,6 +116,7 @@
        
         private readonly ObjectDict services;
         private readonly TypeList initOrder;
+        private readonly ImplementDict implementDict;
 
         #endregion
 

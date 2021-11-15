@@ -43,6 +43,20 @@ namespace unit_test
             }
             catch (ContainerException) { }
         }
+        [TestMethod]
+        public void TestMissingRoot()
+        {
+            ServiceList sublist = new();
+            sublist.Add<A>();
+            sublist.Add<B>();
+
+            ServiceList list = new();
+            try
+            {
+                list.Add<C>(sublist);
+            }
+            catch (ContainerException) { }
+        }
 
         [TestMethod]
         public void TestDuplicatedInSublist()
@@ -64,7 +78,7 @@ namespace unit_test
         class Z { public Z(IInterface[] x) { count = x.Length; } public int count; }
 
         [TestMethod]
-        public void TestMulti()
+        public void TestSubListAndInterface()
         {
             ServiceList list0 = new();
             list0.Add<X0>().Is<IInterface>();
