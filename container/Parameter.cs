@@ -5,30 +5,17 @@ namespace DI
 {
     internal abstract class Parameter
     {
-        internal abstract void RemoveFromSet(TypeSet set);
-        internal abstract bool TryAddToStack(TypeStack stack, ObjectDict services);
         internal abstract object GetArg(ObjectDict services);
+        internal abstract void AddDependencies(TypeSet set);
 
-        protected static bool HasCommonRoot(ServiceDescDict serviceDescriptors, Type childType, Type parentType)
+        protected static TypeList FilterImplementsByRoot(TypeList implementList, ServiceDescDict serviceDescriptors, Type parentType)
         {
-            var childRoots = serviceDescriptors[childType].roots;
-            var parentRoots = serviceDescriptors[parentType].roots;
-            return childRoots.Overlaps(parentRoots);
-        }
+            if (serviceDescriptors[parentType].roots.Count > 1)
+                throw new ContainerException("Service <" + parentType.Name + "> is included in multiple sublists, and has virtual dependencies. Both are not supported at the same time.");
 
-        protected static Type[] FilterImplementsByRoot(TypeList implementList, ServiceDescDict serviceDescriptors, Type parentType)
-        {
-            var filteredList = implementList.FindAll(implType => HasCommonRoot(serviceDescriptors, implType, parentType));
-            return filteredList.ToArray();
-        }
+            var parentRoot = serviceDescriptors[parentType].roots.First();
 
-        protected static bool TryAddTypeToStack(TypeStack stack, ObjectDict services, Type type)
-        {
-            if (services.ContainsKey(type))
-                return false;
-
-            stack.Push(type);
-            return true;
+            return implementList.FindAll(implType => serviceDescriptors[implType].roots.Contains(parentRoot));
         }
     };
 
@@ -43,67 +30,78 @@ namespace DI
             if (implementDict.TryGetValue(baseType, out var implementList))
                 types = FilterImplementsByRoot(implementList, serviceDescriptors, parentType);
             else
-                types = new Type[0];
+                types = new();
         }
 
-        internal override void RemoveFromSet(TypeSet set)
+        internal override void AddDependencies(TypeSet set)
         {
-            foreach (var type in types)
-                set.Remove(type);
-        }
-
-        internal override bool TryAddToStack(TypeStack stack, ObjectDict services)
-        {
-            bool bAdded = false;
-
-            foreach (var type in types)
-                bAdded |= TryAddTypeToStack(stack, services, type);
-
-            return bAdded;
+            set.UnionWith(types);
         }
 
         internal override object GetArg(ObjectDict services)
         {
-            var arg = Array.CreateInstance(baseType, types.Length);
+            var arg = Array.CreateInstance(baseType, types.Count);
 
-            for (var i = 0; i < types.Length; i++)
+            for (var i = 0; i < types.Count; i++)
                 arg.SetValue(services[types[i]], i);
 
             return arg;
         }
 
-        public Type[] types;
-        public Type baseType;
+        internal readonly TypeList types;
+        internal readonly Type baseType;
     }
 
     internal class RegularParameter : Parameter
     {
         public RegularParameter(ImplementDict implementDict, ServiceDescDict serviceDescriptors, Type type, Type parentType)
         {
-            if (type == parentType)
-                throw new ContainerException("Service <" + parentType.Name + "> cannot depend on itself!");
-
-            if (serviceDescriptors.ContainsKey(type) && HasCommonRoot(serviceDescriptors, type, parentType))
-                this.type = type;
-            else if (implementDict.TryGetValue(type, out var implementList))
-                this.type = FilterImplementsByRoot(implementList, serviceDescriptors, parentType).First();
+            Type? res;
+            if ((res = TryGetDirectType(serviceDescriptors, type, parentType)) is not null)
+                this.type = res;
+            else if ((res = TryGetImplementType(implementDict, serviceDescriptors, type, parentType)) is not null)
+                this.type = res;
             else
                 throw new ContainerException("Regular Parameter <" + type.Name + "> required by <" + parentType.Name + "> cannot be resolved!");
         }
 
-        internal override void RemoveFromSet(TypeSet set)
+        internal override void AddDependencies(TypeSet set)
         {
-            set.Remove(type);
-        }
-        internal override bool TryAddToStack(TypeStack stack, ObjectDict services)
-        {
-            return TryAddTypeToStack(stack, services, type);
+            set.Add(type);
         }
         internal override object GetArg(ObjectDict services)
         {
             return services[type];
         }
 
-        public Type type;
+        private static Type? TryGetDirectType(ServiceDescDict serviceDescriptors, Type type, Type parentType)
+        {
+            if (!serviceDescriptors.ContainsKey(type))
+                return null;
+
+            var roots = serviceDescriptors[type].roots;
+            var parentRoots = serviceDescriptors[parentType].roots;
+            if (!roots.Overlaps(parentRoots))
+                return null;
+
+            return type;
+        }
+        private static Type? TryGetImplementType(ImplementDict implementDict, ServiceDescDict serviceDescriptors, Type type, Type parentType)
+        {
+            if (!implementDict.TryGetValue(type, out var implementList))
+                return null;
+
+            var implements = FilterImplementsByRoot(implementList, serviceDescriptors, parentType);
+
+            if (implements.Count == 0)
+                throw new ContainerException("No implementation found for type <" + type.Name + ">!");
+
+            if (implements.Count > 1)
+                throw new ContainerException("Type <" + type.Name + "> has multiple ambiguous implementations!");
+
+            return implements.First();
+        }
+
+        internal readonly Type type;
     };
 }

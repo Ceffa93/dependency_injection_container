@@ -4,7 +4,7 @@ using DI;
 namespace unit_test
 {
     [TestClass]
-    public class SubListTests
+    public class SublistTests
     {
         class A { }
         class B { public B(A x) { } }
@@ -12,7 +12,7 @@ namespace unit_test
         class D { public D(A x) { } }
 
         [TestMethod]
-        public void TestCorrectScope()
+        public void TestInSublistVisible()
         {
             ServiceList childList = new();
             childList.Add(new A());
@@ -26,7 +26,7 @@ namespace unit_test
         }
 
         [TestMethod]
-        public void TestWrongScope()
+        public void TestInSublistNotVisible()
         {
             ServiceList childList = new();
             childList.Add(new A());
@@ -43,6 +43,7 @@ namespace unit_test
             }
             catch (ContainerException) { }
         }
+
         [TestMethod]
         public void TestMissingRoot()
         {
@@ -68,33 +69,6 @@ namespace unit_test
             ServiceList list = new();
             list.Add<A>();
             list.Add<B>(childList);
-        }
-
-        interface IInterface { }
-        class X0 : IInterface { }
-        class X1 : IInterface { }
-        class X2 : IInterface { }
-        class Y { public Y(X0 x){ } }
-        class Z { public Z(IInterface[] x) { count = x.Length; } public int count; }
-
-        [TestMethod]
-        public void TestSubListAndInterface()
-        {
-            ServiceList list0 = new();
-            list0.Add<X0>().Is<IInterface>();
-            list0.Add<Y>();
-
-            ServiceList list1 = new();
-            list1.Add<X1>().Is<IInterface>();
-
-            ServiceList list = new();
-            list.Add<X2>().Is<IInterface>();
-            list.Add<Z>();
-            list.Add<Y>(list0);
-            list.Add<X1>(list1);
-
-            var c = new Container(list);
-            Assert.AreEqual(c.Get<Z>().count, 2);
         }
     }
 }

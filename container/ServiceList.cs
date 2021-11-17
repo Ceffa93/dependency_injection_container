@@ -79,8 +79,8 @@
 
         private void AddExternalService(Type type, object service)
         {
-            if (externalServices.ContainsKey(type))
-                throw new ContainerException("External service <" + type.Name + "> already present!");
+            if (IsInternalServiceAlreadyPresent(type, service))
+                return;
 
             externalServices[type] = service;
 
@@ -99,6 +99,17 @@
             if (!serviceDescriptors.ContainsKey(type))
                 serviceDescriptors[type] = new(type);
             serviceDescriptors[type].roots.Add(ROOT);
+        }
+
+        private bool IsInternalServiceAlreadyPresent(Type type, object service)
+        {
+            if (!externalServices.TryGetValue(type, out var oldValue))
+                return false;
+
+            if (oldValue == service)
+                return true;
+               
+            throw new ContainerException("Added two different external services of the same type <" + type.Name + ">!");
         }
 
         internal readonly ObjectDict externalServices;

@@ -10,9 +10,8 @@
         {
             initOrder = new();
             services = new();
-            implementDict = new();
 
-            GenerateImplementDict(serviceList.serviceDescriptors);
+            implementDict = GenerateImplementDict(serviceList.serviceDescriptors);
 
             AddExternalServices(serviceList.externalServices);
             AddInternalServices(serviceList.internalServices, serviceList.serviceDescriptors);
@@ -21,9 +20,8 @@
         public T Get<T>()
           where T : class
         {
-            if (bIsDisposed)
-                throw new ObjectDisposedException("Container has been disposed!");
-
+            CheckDisposed();
+           
             var type = typeof(T);
 
             if (!services.ContainsKey(type))
@@ -34,8 +32,7 @@
         public void Get<T>(out T[] implementServices)
           where T : class
         {
-            if (bIsDisposed)
-                throw new ObjectDisposedException("Container has been disposed!");
+            CheckDisposed();
 
             var type = typeof(T);
 
@@ -56,6 +53,14 @@
 
         #region private
 
+        private static ImplementDict GenerateImplementDict(ServiceDescDict serviceDescriptors)
+        {
+            var implementDict = new ImplementDict();
+            foreach (var desc in serviceDescriptors.Values)
+                desc.AddImplementsToDict(implementDict);
+            return implementDict;
+        }
+
         private void AddExternalServices(ObjectDict externalServices)
         {
             foreach (var service in externalServices)
@@ -65,14 +70,12 @@
         private void AddInternalServices(TypeSet internalServices, ServiceDescDict serviceDescriptors)
         {
             var constructorDict = GenerateConstructorDict(internalServices, serviceDescriptors);
+            var rootTypes = FindRootTypes(constructorDict);
 
-            TypeStack typeStack = new(constructorDict.Count);
+            foreach (var type in rootTypes)
+                Construct(constructorDict, type, ROOT, new());
 
-            foreach (var type in FindRootTypes(constructorDict))
-                typeStack.Push(type);
-
-            while (typeStack.Count > 0)
-                ProcessStack(constructorDict, typeStack);
+            DetectDisconnectedCircularDependencies(constructorDict);
         }
 
         private ConstructorDict GenerateConstructorDict(TypeSet internalServices, ServiceDescDict serviceDescriptors)
@@ -85,38 +88,59 @@
             return constructorDict;
         }
 
-        private void GenerateImplementDict(ServiceDescDict serviceDescriptors)
-        {
-            foreach (var desc in serviceDescriptors.Values)
-                desc.AddImplementsToDict(implementDict);
-        }
-
         private static TypeSet FindRootTypes(ConstructorDict constructorDict)
         {
             TypeSet rootTypes = new(constructorDict.Keys);
 
-            foreach (var constr in constructorDict.Values)
-                constr.RemoveParamsFromSet(rootTypes);
+            foreach (var constructor in constructorDict.Values)
+                rootTypes.ExceptWith(constructor.GetDependencies());
 
             return rootTypes;
         }
 
-        private void ProcessStack(ConstructorDict constructorDict, TypeStack typeStack)
+        private void Construct(ConstructorDict constructorDict, Type type, Type parentType, TypeSet stack)
         {
-            var type = typeStack.Peek();
-            var constructor = constructorDict[type];
+            if (stack.Contains(type))
+                throw new ContainerException("Circular dependency caused by <" + parentType.Name + "> including <" + type.Name + ">!");
 
-            if (constructor.TryAddParamsToStack(typeStack, services)) 
+            stack.Add(type);
+
+            ConstructDependencies(constructorDict, type, stack);
+
+            initOrder.Add(type);
+
+            services[type] = constructorDict[type].Construct(services);
+
+            stack.Remove(type);
+        }
+
+        private void ConstructDependencies(ConstructorDict constructorDict, Type type, TypeSet stack)
+        {
+            var allDeps = constructorDict[type].GetDependencies();
+            var unresolvedDeps = allDeps.Where(depType => !services.ContainsKey(depType));
+
+            foreach (var dep in unresolvedDeps)
+                Construct(constructorDict, dep, type, stack);
+        }
+
+        private void DetectDisconnectedCircularDependencies(ConstructorDict constructorDict)
+        {
+            if (constructorDict.Count == initOrder.Count)
                 return;
 
-            typeStack.Pop();
-            initOrder.Add(type);
-            services[type] = constructor.Construct(services);
+            var disconnectedTypes = constructorDict.Keys.Except(initOrder);
+
+            string message = new("");
+            foreach (var type in disconnectedTypes)
+                message += "<" + type.Name + ">";
+            
+            throw new ContainerException("Disconnected circular detection detected on types " + message + ">!");
         }
-       
+
         private readonly ObjectDict services;
         private readonly TypeList initOrder;
         private readonly ImplementDict implementDict;
+        internal readonly static Type ROOT = typeof(void);
 
         #endregion
 
@@ -134,6 +158,11 @@
         {
             if (obj is IDisposable)
                 ((IDisposable)obj).Dispose();
+        }
+        private void CheckDisposed()
+        {
+            if (bIsDisposed)
+                throw new ObjectDisposedException("Container has been disposed!");
         }
 
         private bool bIsDisposed;

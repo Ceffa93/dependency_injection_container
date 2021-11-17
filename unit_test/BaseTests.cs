@@ -71,46 +71,6 @@ namespace unit_test
             catch (ContainerException) {}
         }
 
-        class SelfDep { public SelfDep (SelfDep x) { } }
-
-        [TestMethod]
-        public void TestSelfDependency()
-        {
-            ServiceList list = new();
-            list.Add<SelfDep>();
-            try
-            {
-                new Container(list);
-                Assert.Fail();
-            }
-            catch (ContainerException) { }
-        }
-
-        [TestMethod]
-        public void TestGetService()
-        {
-            ServiceList list = new();
-            list.Add<A0>();
-            list.Add(new A1());
-
-            Container container = new(list);
-            container.Get<A0>();
-            container.Get<A1>();
-        }
-
-        [TestMethod]
-        public void TestFailedGet()
-        {
-            ServiceList list = new();
-            Container container = new(list);
-            try
-            {
-                container.Get<A0>();
-                Assert.Fail();
-            }
-            catch (ContainerException) { }
-        }
-
         [TestMethod]
         public void TestDisposeException()
         {
@@ -140,6 +100,7 @@ namespace unit_test
             try
             {
                 new Container(list);
+                Assert.Fail();
             }
             catch (ContainerException) { }
         }
@@ -162,7 +123,7 @@ namespace unit_test
         }
 
         [TestMethod]
-        public void TestDoubleExternal()
+        public void TestDoubleExternalDifferent()
         {
             ServiceList list = new();
             list.Add(new A0());
@@ -170,22 +131,17 @@ namespace unit_test
             {
                 list.Add(new A0());
                 Assert.Fail();
-            } catch (ContainerException) { }
+            } 
+            catch (ContainerException) { }
         }
 
         [TestMethod]
-        public void TestDoubleAddExternal()
+        public void TestDoubleExternalSame()
         {
             ServiceList list = new();
-            A0 x = new();
-            A0 y = new();
-            list.Add(x);
-            try
-            {
-                list.Add(y);
-                Assert.Fail();
-            }
-            catch (ContainerException) { }
+            A0 a = new();
+            list.Add(a);
+            list.Add(a);
         }
     }
 }

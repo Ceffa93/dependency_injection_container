@@ -45,29 +45,5 @@ namespace unit_test
             }
             catch (ContainerException) { }
         }
-
-        [TestMethod]
-        public void TestGetServices()
-        {
-            ServiceList list = new();
-            list.Add(new A0()).Is<BaseClass>();
-            list.Add<A1>().Is<BaseClass>();
-            new Container(list).Get<BaseClass>(out var services);
-            Assert.AreEqual(services.Length, 2);
-        }
-
-        [TestMethod]
-        public void TestFailedGetServices()
-        {
-            ServiceList list = new();
-            var c = new Container(list);
-            try
-            {
-                c.Get<BaseClass>(out var services);
-                Assert.Fail();
-            } 
-            catch (ContainerException) { }
-        }
-
     }
 }

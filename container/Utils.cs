@@ -3,7 +3,6 @@ global using ObjectDict = System.Collections.Generic.Dictionary<System.Type, obj
 global using TypeSet = System.Collections.Generic.HashSet<System.Type>;
 global using TypeList = System.Collections.Generic.List<System.Type>;
 global using ImplementDict = System.Collections.Generic.Dictionary<System.Type, System.Collections.Generic.List<System.Type>>;
-global using TypeStack = System.Collections.Generic.Stack<System.Type>;
 
 namespace DI
 {
@@ -11,5 +10,4 @@ namespace DI
     {
         public ContainerException(string? message) : base(message) { }
     };
-
 }

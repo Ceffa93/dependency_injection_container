@@ -6,12 +6,7 @@ namespace DI
     {
         public Constructor(Type type, ServiceDescDict serviceDescriptors, ImplementDict implementDict)
         {
-            var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
-
-            if (constrList.Length > 1)
-                throw new ContainerException("Class <" + type.Name + "> must specify a single public constructor!");
-
-            constrInfo = constrList.First();
+            constrInfo = GetConstructorInfo(type);
 
             var paramInfos = constrInfo.GetParameters();
 
@@ -21,18 +16,14 @@ namespace DI
                 addParamDescriptor(paramInfo, implementDict, serviceDescriptors, type);
         }
       
-        internal void RemoveParamsFromSet(TypeSet rootTypes)
+        internal TypeSet GetDependencies()
         {
-            foreach (var param in parameters)
-                param.RemoveFromSet(rootTypes);
-        }
+            var set = new TypeSet();
 
-        internal bool TryAddParamsToStack(TypeStack typeStack, ObjectDict services)
-        {
-            bool bAddedParams = false;
             foreach (var param in parameters)
-                bAddedParams |= param.TryAddToStack(typeStack, services);
-            return bAddedParams;
+                param.AddDependencies(set);
+
+            return set;
         }
 
         internal object Construct(ObjectDict services)
@@ -43,6 +34,16 @@ namespace DI
                 arguments.Add(desc.GetArg(services));
 
             return constrInfo.Invoke(arguments.ToArray());
+        }
+
+        private static ConstructorInfo GetConstructorInfo(Type type)
+        {
+            var constrList = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public);
+
+            if (constrList.Length > 1)
+                throw new ContainerException("Class <" + type.Name + "> must specify a single public constructor!");
+
+            return constrList.First();
         }
 
         private void addParamDescriptor(ParameterInfo paramInfo, ImplementDict implementDict, ServiceDescDict serviceDescriptors, Type parentType)
