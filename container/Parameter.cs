@@ -11,7 +11,7 @@ namespace DI
         protected static TypeList FilterImplementsByRoot(TypeList implementList, ServiceDescDict serviceDescriptors, Type parentType)
         {
             if (serviceDescriptors[parentType].roots.Count > 1)
-                throw new ContainerException("Service <" + parentType.Name + "> is included in multiple sublists, and has virtual dependencies. Both are not supported at the same time.");
+                throw new ContainerException("Service <" + parentType.Name + "> has multiple roots, and has virtual dependencies. Both are not supported at the same time.");
 
             var parentRoot = serviceDescriptors[parentType].roots.First();
 

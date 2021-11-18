@@ -70,5 +70,26 @@ namespace unit_test
             list.Add<A>();
             list.Add<B>(childList);
         }
+
+        [TestMethod]
+        public void TestSublistDiamond()
+        {
+            ServiceList sharedList = new();
+            sharedList.Add<A>();
+
+            ServiceList list0 = new();
+            list0.Add<A>(sharedList);
+            list0.Add<B>();
+
+            ServiceList list1 = new();
+            list1.Add<A>(sharedList);
+            list1.Add<D>();
+
+            ServiceList baseList = new();
+            baseList.Add<B>(list0);
+            baseList.Add<D>(list1);
+
+            new Container(baseList);
+        }
     }
 }

@@ -79,7 +79,7 @@
 
         private void AddExternalService(Type type, object service)
         {
-            if (IsInternalServiceAlreadyPresent(type, service))
+            if (IsExternalServiceAlreadyPresent(type, service))
                 return;
 
             externalServices[type] = service;
@@ -101,7 +101,7 @@
             serviceDescriptors[type].roots.Add(ROOT);
         }
 
-        private bool IsInternalServiceAlreadyPresent(Type type, object service)
+        private bool IsExternalServiceAlreadyPresent(Type type, object service)
         {
             if (!externalServices.TryGetValue(type, out var oldValue))
                 return false;

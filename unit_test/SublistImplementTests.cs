@@ -63,5 +63,23 @@ namespace unit_test
             }
             catch (ContainerException) { }
         }
+
+        [TestMethod]
+        public void TestSameRootListsMerged()
+        {
+            ServiceList listA = new();
+            listA.Add<X>().Is<IInterface>();
+            listA.Add<Z>();
+
+            ServiceList listB = new();
+            listB.Add<X>().Is<IInterface>();
+            listB.Add<Z>();
+
+            ServiceList baseList = new();
+            baseList.Add<X>(listA);
+            baseList.Add<X>(listB);
+
+            new Container(baseList);
+        }
     }
 }
