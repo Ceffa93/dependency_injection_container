@@ -31,6 +31,7 @@ englishHouseList.Add(foreignStudent).Is<IPerson>();
 
 // Lists can be nested.
 // Each list must specifies its root service, which is the only service visible outside.
+// Note that if two sublists have the same root service, they are merged to the same list.
 var houseList = new ServiceList();
 houseList.Add<ItalianHouse>(italianHouseList);
 houseList.Add<EnglishHouse>(englishHouseList);
